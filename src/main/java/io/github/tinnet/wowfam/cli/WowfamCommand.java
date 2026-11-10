@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -27,11 +28,11 @@ import picocli.CommandLine.ScopeType;
     versionProvider = WowfamCommand.VersionProvider.class,
     description = "Installs and updates World of Warcraft addons listed in wowfam.toml.",
     subcommands = {
+      CommandLine.HelpCommand.class,
       InstallCommand.class,
-      UpdateCommand.class,
       ListCommand.class,
       OutdatedCommand.class,
-      CommandLine.HelpCommand.class
+      UpdateCommand.class
     })
 public final class WowfamCommand implements Runnable {
 
@@ -40,14 +41,14 @@ public final class WowfamCommand implements Runnable {
       scope = ScopeType.INHERIT,
       description = "Path to wowfam.toml (default: ./wowfam.toml).",
       paramLabel = "FILE")
-  Path config;
+  @Nullable Path config;
 
   @Option(
       names = "--addons-dir",
       scope = ScopeType.INHERIT,
       description = "Override settings.addons_dir.",
       paramLabel = "DIR")
-  Path addonsDir;
+  @Nullable Path addonsDir;
 
   @CommandLine.Spec CommandLine.Model.CommandSpec spec;
 

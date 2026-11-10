@@ -12,7 +12,7 @@ import picocli.CommandLine.Spec;
 
 @Command(
     name = "update",
-    aliases = {"upgrade", "up"},
+    aliases = {"up", "upgrade"},
     mixinStandardHelpOptions = true,
     description =
         "Update addons to the newest release matching wowfam.toml and record it in wowfam.lock.")

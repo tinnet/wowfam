@@ -19,7 +19,7 @@ import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-class GitHubBackendTest {
+final class GitHubBackendTest {
 
   private static final String REPO = "rusty-key/spoken-wow";
   private final FakeGitHub github = new FakeGitHub();
@@ -138,7 +138,7 @@ class GitHubBackendTest {
     var version = tc.draw(Generators.fromRegex("[0-9]{1,3}(\\.[0-9]{1,3}){0,3}"), "version");
     var v = tc.draw(Generators.booleans(), "with v") ? "v" : "";
 
-    assertThat(GitHubBackend.versionOf(prefix + v + version, prefix)).contains(Version.of(version));
+    assertThat(GitHubBackend.versionOf(prefix + v + version, prefix)).hasValue(Version.of(version));
     assertThat(GitHubBackend.versionOf("other/" + v + version, prefix)).isEmpty();
   }
 }

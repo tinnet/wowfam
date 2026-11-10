@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 
 /** Talks to the real GitHub API. Run with {@code ./gradlew networkTest}. */
 @Tag("network")
-class SpokenNetworkTest {
+final class SpokenNetworkTest {
 
   @Test
   void findsSpokenReleasesInTheMonorepo() {

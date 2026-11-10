@@ -7,7 +7,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class TocFileTest {
+final class TocFileTest {
 
   @Test
   void readsMetadataAndRequiredDependencies() {

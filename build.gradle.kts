@@ -2,7 +2,11 @@ plugins {
     application
     alias(libs.plugins.graalvm.native)
     alias(libs.plugins.spotless)
+    alias(libs.plugins.errorprone)
 }
+
+import net.ltgt.gradle.errorprone.CheckSeverity
+import net.ltgt.gradle.errorprone.errorprone
 
 group = "io.github.tinnet"
 version = "0.1.0-SNAPSHOT"
@@ -22,10 +26,18 @@ repositories {
 
 dependencies {
     implementation(libs.picocli)
+    // @NullMarked / @Nullable, checked by NullAway at compile time.
+    implementation(libs.jspecify)
     implementation(libs.jackson.databind)
     implementation(libs.jackson.toml)
     // Generates GraalVM reflection/resource config for the picocli commands at compile time.
     annotationProcessor(libs.picocli.codegen)
+
+    // Static analysis while javac compiles (JVM bytecode); the native image is built afterwards.
+    errorprone(libs.errorprone.core)
+    errorprone(libs.picnic.errorprone.contrib)
+    errorprone(libs.picnic.refaster.runner)
+    errorprone(libs.nullaway)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
@@ -74,10 +86,40 @@ application {
     applicationName = "wowfam"
 }
 
+// `./gradlew compileJava compileTestJava -Perrorprone.patch` (or `just ep-fix`) applies the
+// suggested fixes in place instead of reporting them.
+val errorpronePatch = providers.gradleProperty("errorprone.patch").isPresent
+
 tasks.withType<JavaCompile>().configureEach {
     options.release = javaVersion
     options.encoding = "UTF-8"
     options.compilerArgs.addAll(listOf("-Xlint:all,-serial,-processing", "-Aproject=${project.group}/${project.name}"))
+    // Error Prone, Picnic's error-prone-support and NullAway run as a javac plugin while the JVM
+    // bytecode is compiled; GraalVM only sees the result. Any finding fails the build (-Werror).
+    options.errorprone {
+        disableWarningsInGeneratedCode = true
+        excludedPaths = ".*/build/generated/.*"
+        // Picnic's checks and Refaster rules default to "suggestion"; make them count.
+        allSuggestionsAsWarnings = true
+        // Rules that rewrite code to use Guava, which this project does not depend on.
+        option("Refaster:NamePattern", "^(?!(Immutable\\w*|Preconditions|Multimap\\w*|Guava\\w*)Rules).*")
+        // Suggests Guava's Splitter; String.split is fine for the fixed separators used here.
+        disable("StringSplitter")
+        // NullAway: everything in @NullMarked packages (see package-info.java) is non-null unless @Nullable.
+        check("NullAway", CheckSeverity.ERROR)
+        option("NullAway:OnlyNullMarked", "true")
+        option("NullAway:JSpecifyMode", "true")
+        // Treat assertThat(x).isNotNull() in tests as a null check.
+        option("NullAway:HandleTestAssertionLibraries", "true")
+        // picocli injects these before calling the command.
+        option("NullAway:ExcludedFieldAnnotations", "picocli.CommandLine.Spec,picocli.CommandLine.ParentCommand")
+        if (errorpronePatch) {
+            errorproneArgs.addAll("-XepPatchChecks:", "-XepPatchLocation:IN_PLACE")
+        }
+    }
+    if (!errorpronePatch) {
+        options.compilerArgs.add("-Werror")
+    }
 }
 
 tasks.test {

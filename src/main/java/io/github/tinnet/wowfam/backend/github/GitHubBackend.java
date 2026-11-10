@@ -1,5 +1,7 @@
 package io.github.tinnet.wowfam.backend.github;
 
+import static java.util.Comparator.comparing;
+
 import io.github.tinnet.wowfam.backend.Asset;
 import io.github.tinnet.wowfam.backend.Backend;
 import io.github.tinnet.wowfam.backend.BackendException;
@@ -10,7 +12,6 @@ import io.github.tinnet.wowfam.util.Glob;
 import io.github.tinnet.wowfam.util.Version;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -54,7 +55,7 @@ public final class GitHubBackend implements Backend {
     }
     var prefix = spec.option("tag_prefix").orElse("");
     var assetGlob = Glob.of(spec.option("asset").orElse("*.zip"));
-    boolean prereleases = spec.option("prerelease").map(Boolean::parseBoolean).orElse(false);
+    boolean prereleases = spec.option("prerelease").filter(Boolean::parseBoolean).isPresent();
 
     var result = new ArrayList<Release>();
     for (var release : api.releases(repo)) {
@@ -62,7 +63,7 @@ public final class GitHubBackend implements Backend {
         continue;
       }
       var version = versionOf(release.tag(), prefix);
-      if (version.isEmpty() || (version.get().isPrerelease() && !prereleases)) {
+      if (version.isEmpty() || (version.orElseThrow().isPrerelease() && !prereleases)) {
         continue;
       }
       var matching = release.assets().stream().filter(a -> assetGlob.matches(a.name())).toList();
@@ -84,11 +85,11 @@ public final class GitHubBackend implements Backend {
       var a = matching.getFirst();
       result.add(
           new Release(
-              version.get(),
+              version.orElseThrow(),
               release.tag(),
               new Asset(a.name(), a.downloadUrl(), a.size(), sha256(a.digest()))));
     }
-    result.sort(Comparator.comparing(Release::version).reversed());
+    result.sort(comparing(Release::version).reversed());
     return result;
   }
 

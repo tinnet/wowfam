@@ -54,6 +54,8 @@ public final class Installer {
       List<String> folders) {}
 
   /**
+   * The result of a run.
+   *
    * @param missingDependencies addon folder -> required folders (from its .toc) not present in the
    *     AddOns directory
    */
@@ -108,16 +110,16 @@ public final class Installer {
 
     boolean present =
         locked.isPresent()
-            && locked.get().folders().stream()
+            && locked.orElseThrow().folders().stream()
                 .allMatch(f -> Files.isDirectory(addonsDir.resolve(f)));
-    if (!force && present && locked.get().tag().equals(release.tag())) {
+    if (!force && present && locked.orElseThrow().tag().equals(release.tag())) {
       log.accept(spec.name() + " " + release.version() + " is up to date");
       return new Outcome(
           spec.name(),
           Status.UP_TO_DATE,
-          Optional.of(locked.get().version()),
+          Optional.of(locked.orElseThrow().version()),
           release.version().toString(),
-          locked.get().folders());
+          locked.orElseThrow().folders());
     }
 
     var archive = fetch(config, spec, release);
@@ -129,7 +131,7 @@ public final class Installer {
             addonsDir,
             spec.name(),
             lock,
-            locked.map(LockEntry::folders).orElse(List.of()));
+            locked.map(LockEntry::folders).orElseGet(List::of));
     lock.put(
         spec.name(),
         new LockEntry(
@@ -155,7 +157,7 @@ public final class Installer {
   private Path fetch(Config config, AddonSpec spec, Release release) {
     var asset = release.asset();
     var target = config.settings().cacheDir().resolve(spec.name()).resolve(asset.name());
-    if (Files.exists(target) && asset.sha256().map(s -> s.equals(sha256(target))).orElse(false)) {
+    if (Files.exists(target) && asset.sha256().filter(s -> s.equals(sha256(target))).isPresent()) {
       log.accept("using cached " + asset.name());
       return target;
     }
@@ -166,12 +168,12 @@ public final class Installer {
     backends.get(spec.source().backend()).download(asset, target);
     if (asset.sha256().isPresent()) {
       var actual = sha256(target);
-      if (!asset.sha256().get().equals(actual)) {
+      if (!asset.sha256().orElseThrow().equals(actual)) {
         throw new InstallException(
             "checksum mismatch for "
                 + asset.name()
                 + ": expected "
-                + asset.sha256().get()
+                + asset.sha256().orElseThrow()
                 + ", got "
                 + actual);
       }
@@ -193,13 +195,17 @@ public final class Installer {
       var folders = ZipExtractor.extract(archive, staging);
       for (var folder : folders) {
         var owner = lock.ownerOf(folder);
-        if (owner.isPresent() && !owner.get().equals(addon)) {
+        if (owner.isPresent() && !owner.orElseThrow().equals(addon)) {
           throw new InstallException(
-              addon + " wants to install folder " + folder + ", which belongs to " + owner.get());
+              addon
+                  + " wants to install folder "
+                  + folder
+                  + ", which belongs to "
+                  + owner.orElseThrow());
         }
       }
       var stale = new LinkedHashSet<>(previousFolders);
-      folders.forEach(stale::remove);
+      stale.removeAll(folders);
       for (var folder : stale) {
         deleteRecursively(addonsDir.resolve(folder));
       }
@@ -266,7 +272,7 @@ public final class Installer {
       return bytes + " B";
     }
     int unit = (63 - Long.numberOfLeadingZeros(bytes)) / 10;
-    return String.format("%.1f %sB", bytes / (double) (1L << (unit * 10)), " KMGTPE".charAt(unit));
+    return "%.1f %sB".formatted(bytes / (double) (1L << (unit * 10)), " KMGTPE".charAt(unit));
   }
 
   static void deleteRecursively(Path path) throws IOException {

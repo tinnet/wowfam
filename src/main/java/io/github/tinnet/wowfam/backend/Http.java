@@ -1,5 +1,7 @@
 package io.github.tinnet.wowfam.backend;
 
+import static java.util.function.Predicate.not;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
@@ -61,9 +63,9 @@ public final class Http {
               .map(v ->
                   Arrays.stream(v.split(","))
                       .map(s -> s.strip().toLowerCase(Locale.ROOT))
-                      .filter(s -> !s.isEmpty())
+                      .filter(not(String::isEmpty))
                       .toList())
-              .orElse(List.of());
+              .orElseGet(List::of);
       return Optional.of(new EnvProxySelector(https, http, noProxy));
     }
 

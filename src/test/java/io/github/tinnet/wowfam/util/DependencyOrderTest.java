@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-class DependencyOrderTest {
+final class DependencyOrderTest {
 
   @Test
   void spokenModulesComeAfterSpoken() {

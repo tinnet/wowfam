@@ -1,5 +1,8 @@
 package io.github.tinnet.wowfam.util;
 
+import static java.util.regex.Pattern.CASE_INSENSITIVE;
+import static java.util.regex.Pattern.DOTALL;
+
 import java.util.regex.Pattern;
 
 /** Minimal shell-style glob for release asset names: {@code *} and {@code ?}, case-insensitive. */
@@ -12,7 +15,8 @@ public final class Glob {
     this.glob = glob;
     var regex = new StringBuilder();
     var literal = new StringBuilder();
-    for (char c : glob.toCharArray()) {
+    for (int i = 0; i < glob.length(); i++) {
+      char c = glob.charAt(i);
       if (c == '*' || c == '?') {
         if (!literal.isEmpty()) {
           regex.append(Pattern.quote(literal.toString()));
@@ -26,7 +30,7 @@ public final class Glob {
     if (!literal.isEmpty()) {
       regex.append(Pattern.quote(literal.toString()));
     }
-    this.pattern = Pattern.compile(regex.toString(), Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    this.pattern = Pattern.compile(regex.toString(), CASE_INSENSITIVE | DOTALL);
   }
 
   public static Glob of(String glob) {

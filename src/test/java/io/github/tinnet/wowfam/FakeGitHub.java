@@ -1,5 +1,7 @@
 package io.github.tinnet.wowfam;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.github.tinnet.wowfam.backend.Backends;
@@ -9,9 +11,9 @@ import io.github.tinnet.wowfam.backend.github.GitHubBackend;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -30,6 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 public final class FakeGitHub implements AutoCloseable {
 
+  @SuppressWarnings("ArrayRecordComponent") // test fixture; never compared
   public record FakeAsset(String name, byte[] content) {}
 
   public record FakeRelease(
@@ -42,7 +45,7 @@ public final class FakeGitHub implements AutoCloseable {
 
   public FakeGitHub() {
     try {
-      server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+      server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
@@ -84,7 +87,7 @@ public final class FakeGitHub implements AutoCloseable {
     try (var zip = new ZipOutputStream(bytes)) {
       for (var e : entries.entrySet()) {
         zip.putNextEntry(new ZipEntry(e.getKey()));
-        zip.write(e.getValue().getBytes(StandardCharsets.UTF_8));
+        zip.write(e.getValue().getBytes(UTF_8));
         zip.closeEntry();
       }
     } catch (IOException e) {
@@ -195,8 +198,8 @@ public final class FakeGitHub implements AutoCloseable {
       send(exchange, 404, "not found");
       return;
     }
-    exchange.sendResponseHeaders(200, asset.get().content().length);
-    exchange.getResponseBody().write(asset.get().content());
+    exchange.sendResponseHeaders(200, asset.orElseThrow().content().length);
+    exchange.getResponseBody().write(asset.orElseThrow().content());
   }
 
   private static int queryInt(URI uri, String key, int dflt) {
@@ -213,7 +216,7 @@ public final class FakeGitHub implements AutoCloseable {
   }
 
   private static void send(HttpExchange exchange, int status, String body) throws IOException {
-    var bytes = body.getBytes(StandardCharsets.UTF_8);
+    var bytes = body.getBytes(UTF_8);
     exchange.getResponseHeaders().add("Content-Type", "application/json");
     exchange.sendResponseHeaders(status, bytes.length);
     exchange.getResponseBody().write(bytes);

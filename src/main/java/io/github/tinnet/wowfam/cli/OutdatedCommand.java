@@ -38,13 +38,15 @@ final class OutdatedCommand implements Callable<Integer> {
       var isOutdated =
           installed
               .flatMap(Version::parse)
-              .map(v -> v.compareTo(newest.get().version()) < 0)
+              .map(v -> v.compareTo(newest.orElseThrow().version()) < 0)
               .orElse(true);
       if (isOutdated) {
         if (outdated++ == 0) {
           out.printf("%-28s %-12s %s%n", "ADDON", "INSTALLED", "LATEST");
         }
-        out.printf("%-28s %-12s %s%n", addon.name(), installed.orElse("-"), newest.get().version());
+        out.printf(
+            "%-28s %-12s %s%n",
+            addon.name(), installed.orElse("-"), newest.orElseThrow().version());
       }
     }
     if (outdated == 0) {

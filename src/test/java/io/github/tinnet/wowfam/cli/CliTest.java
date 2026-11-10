@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /** End to end through the CLI, against a fake GitHub laid out like rusty-key/spoken-wow. */
-class CliTest {
+final class CliTest {
 
   private static final String REPO = "rusty-key/spoken-wow";
 
@@ -26,8 +26,8 @@ class CliTest {
   private final FakeGitHub github = new FakeGitHub();
   private Path config;
   private Path addons;
-  private StringWriter out;
-  private StringWriter err;
+  private StringWriter out = new StringWriter();
+  private StringWriter err = new StringWriter();
 
   @BeforeEach
   void setUp() throws Exception {
@@ -95,7 +95,7 @@ class CliTest {
 
   @Test
   void installsUpdatesAndCleansUp() throws Exception {
-    assertThat(run("install")).as(err.toString()).isZero();
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
     assertThat(out.toString()).contains("✓ spoken 3.8.4", "✓ spoken-readables-audio 2.3.0");
     assertThat(addons.resolve("Spoken/Spoken.toc")).content().contains("## Version: 3.8.4");
     assertThat(addons.resolve("SpokenQuests")).isDirectory();
@@ -117,33 +117,33 @@ class CliTest {
 
     // A second install is a no-op and downloads nothing.
     int downloads = downloads();
-    assertThat(run("install")).isZero();
+    assertThat(run("install")).isEqualTo(0);
     assertThat(out.toString()).contains("spoken 3.8.4 is up to date");
     assertThat(downloads()).isEqualTo(downloads);
 
     // A new release: install keeps the lock, update moves to it and drops the legacy folder.
     github.release(REPO, "spoken/v3.8.5", spoken("3.8.5", false));
-    assertThat(run("outdated")).isZero();
+    assertThat(run("outdated")).isEqualTo(0);
     assertThat(out.toString()).containsPattern("spoken\\s+3.8.4\\s+3.8.5");
-    assertThat(run("install")).isZero();
+    assertThat(run("install")).isEqualTo(0);
     assertThat(addons.resolve("Spoken/Spoken.toc")).content().contains("3.8.4");
 
-    assertThat(run("update", "spoken")).as(err.toString()).isZero();
+    assertThat(run("update", "spoken")).as(err.toString()).isEqualTo(0);
     assertThat(out.toString()).contains("↑ spoken 3.8.4 -> 3.8.5");
     assertThat(addons.resolve("Spoken/Spoken.toc")).content().contains("3.8.5");
     assertThat(addons.resolve("SpokenQuests")).doesNotExist();
     assertThat(addons.resolve("SpokenReadablesAudio")).isDirectory();
 
-    assertThat(run("list")).isZero();
+    assertThat(run("list")).isEqualTo(0);
     assertThat(out.toString())
         .containsPattern("spoken\\s+latest\\s+3.8.5\\s+github:rusty-key/spoken-wow");
-    assertThat(run("outdated")).isZero();
+    assertThat(run("outdated")).isEqualTo(0);
     assertThat(out.toString()).contains("all addons are up to date");
   }
 
   @Test
   void installingOneAddonPullsInItsDependencies() {
-    assertThat(run("install", "spoken-readables-audio")).as(err.toString()).isZero();
+    assertThat(run("install", "spoken-readables-audio")).as(err.toString()).isEqualTo(0);
     assertThat(addons.resolve("Spoken")).isDirectory();
     assertThat(addons.resolve("SpokenReadablesAudio")).isDirectory();
   }
@@ -164,7 +164,7 @@ class CliTest {
         "someone/quests",
         "v1.0.0",
         addonZip("Q-1.0.0.zip", "1.0.0", Map.of("Spoken_Quests", "Spoken")));
-    assertThat(run("install")).isZero();
+    assertThat(run("install")).isEqualTo(0);
     assertThat(err.toString())
         .contains("warning: Spoken_Quests requires Spoken, which is not installed");
   }

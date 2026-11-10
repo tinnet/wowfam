@@ -29,10 +29,11 @@ public final class DependencyOrder {
   }
 
   /**
+   * Returns the roots and their transitive dependencies, dependencies first, otherwise in the order
+   * the roots were given.
+   *
    * @param graph node -> the nodes it depends on; dependencies that are not keys are an error
    * @param roots the nodes wanted; their dependencies are pulled in transitively
-   * @return the roots and their transitive dependencies, dependencies first, otherwise in the order
-   *     the roots were given
    */
   public static List<String> resolve(
       Map<String, ? extends Collection<String>> graph, Collection<String> roots) {

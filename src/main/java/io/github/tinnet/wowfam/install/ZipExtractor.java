@@ -34,7 +34,7 @@ public final class ZipExtractor {
         if (relative.isEmpty()) {
           continue;
         }
-        var parts = relative.get();
+        var parts = relative.orElseThrow();
         if (parts.size() == 1 && !entry.isDirectory()) {
           throw new InstallException(
               zip.getFileName()
