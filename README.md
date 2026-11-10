@@ -83,9 +83,9 @@ This happens while `javac` compiles the JVM bytecode; the native image is built 
 Error Prone is pinned to the version Picnic's release is built against (2.50.0) — newer ones break
 its checks — so bump the two together. Refaster rules that would introduce Guava are switched off.
 
-There is no Gradle wrapper: mise installs the Gradle pinned in `mise.toml`. Without mise, any
-Gradle 9.9 on the `PATH` works, and its toolchain support (with the foojay resolver) downloads a
-JDK 25 / GraalVM 25 if none is installed.
+We rely on gradle being available; either mise installs the Gradle pinned in `mise.toml` or
+without mise, any Gradle 9.9 on the `PATH` works, and its toolchain support (with the foojay
+resolver) downloads a JDK 25 / GraalVM 25 if none is installed.
 
 Git hooks ([`lefthook.yml`](lefthook.yml)): pre-commit scans staged changes for secrets and
 formats staged Java files,
