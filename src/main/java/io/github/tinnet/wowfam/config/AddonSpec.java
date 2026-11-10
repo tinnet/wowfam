@@ -11,25 +11,27 @@ import java.util.Optional;
  * @param source backend and reference
  * @param version {@code latest}, an exact version or a version prefix such as {@code 3.8}
  * @param depends other entries of the same file to install first
- * @param options remaining keys, interpreted by the backend (e.g. {@code tag_prefix}, {@code asset})
+ * @param options remaining keys, interpreted by the backend (e.g. {@code tag_prefix}, {@code
+ *     asset})
  */
-public record AddonSpec(String name, Source source, String version, List<String> depends, Map<String, String> options) {
+public record AddonSpec(
+    String name, Source source, String version, List<String> depends, Map<String, String> options) {
 
-    public static final String LATEST = "latest";
+  public static final String LATEST = "latest";
 
-    public AddonSpec {
-        depends = List.copyOf(depends);
-        options = Map.copyOf(options);
-        if (version == null || version.isBlank()) {
-            version = LATEST;
-        }
+  public AddonSpec {
+    depends = List.copyOf(depends);
+    options = Map.copyOf(options);
+    if (version == null || version.isBlank()) {
+      version = LATEST;
     }
+  }
 
-    public Optional<String> option(String key) {
-        return Optional.ofNullable(options.get(key));
-    }
+  public Optional<String> option(String key) {
+    return Optional.ofNullable(options.get(key));
+  }
 
-    public boolean wantsLatest() {
-        return LATEST.equalsIgnoreCase(version);
-    }
+  public boolean wantsLatest() {
+    return LATEST.equalsIgnoreCase(version);
+  }
 }

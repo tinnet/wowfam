@@ -70,13 +70,15 @@ just network-test   # tests against the real GitHub API
 just run --help     # run on the JVM
 just native         # -> build/native/nativeCompile/wowfam
 just poc            # install the Spoken example into examples/spoken/AddOns
+just fmt            # google-java-format 2.0 via Spotless (`just fmt-check` to verify)
 just secrets        # betterleaks over the tree and the git history
 ```
 
 Without mise, `./gradlew` works on its own: Gradle's toolchain support (with the foojay resolver)
 downloads a JDK 25 / GraalVM 25 if none is installed.
 
-Git hooks ([`lefthook.yml`](lefthook.yml)): pre-commit scans staged changes for secrets,
+Git hooks ([`lefthook.yml`](lefthook.yml)): pre-commit scans staged changes for secrets and
+formats staged Java files,
 pre-push runs the tests.
 
 Why Java 25: it is the current LTS and the newest JDK that GraalVM Native Image supports — there is

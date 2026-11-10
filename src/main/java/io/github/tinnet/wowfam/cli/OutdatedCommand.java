@@ -6,44 +6,50 @@ import io.github.tinnet.wowfam.lock.LockFile;
 import io.github.tinnet.wowfam.util.Version;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.ParentCommand;
 import picocli.CommandLine.Spec;
-import picocli.CommandLine.Model.CommandSpec;
 
-@Command(name = "outdated", mixinStandardHelpOptions = true,
-        description = "Show addons with a newer release matching wowfam.toml. Exits 0 either way.")
+@Command(
+    name = "outdated",
+    mixinStandardHelpOptions = true,
+    description = "Show addons with a newer release matching wowfam.toml. Exits 0 either way.")
 final class OutdatedCommand implements Callable<Integer> {
 
-    @ParentCommand
-    WowfamCommand root;
+  @ParentCommand WowfamCommand root;
 
-    @Spec
-    CommandSpec spec;
+  @Spec CommandSpec spec;
 
-    @Override
-    public Integer call() {
-        var config = root.loadConfig();
-        var lock = LockFile.read(config.lockFile());
-        var backends = root.backends();
-        var out = spec.commandLine().getOut();
-        int outdated = 0;
-        for (var addon : config.addons().values()) {
-            var newest = ReleaseSelector.newest(backends.get(addon.source().backend()).releases(addon), addon.version());
-            if (newest.isEmpty()) {
-                continue;
-            }
-            var installed = lock.get(addon.name()).map(LockEntry::version);
-            var isOutdated = installed.flatMap(Version::parse).map(v -> v.compareTo(newest.get().version()) < 0).orElse(true);
-            if (isOutdated) {
-                if (outdated++ == 0) {
-                    out.printf("%-28s %-12s %s%n", "ADDON", "INSTALLED", "LATEST");
-                }
-                out.printf("%-28s %-12s %s%n", addon.name(), installed.orElse("-"), newest.get().version());
-            }
+  @Override
+  public Integer call() {
+    var config = root.loadConfig();
+    var lock = LockFile.read(config.lockFile());
+    var backends = root.backends();
+    var out = spec.commandLine().getOut();
+    int outdated = 0;
+    for (var addon : config.addons().values()) {
+      var newest =
+          ReleaseSelector.newest(
+              backends.get(addon.source().backend()).releases(addon), addon.version());
+      if (newest.isEmpty()) {
+        continue;
+      }
+      var installed = lock.get(addon.name()).map(LockEntry::version);
+      var isOutdated =
+          installed
+              .flatMap(Version::parse)
+              .map(v -> v.compareTo(newest.get().version()) < 0)
+              .orElse(true);
+      if (isOutdated) {
+        if (outdated++ == 0) {
+          out.printf("%-28s %-12s %s%n", "ADDON", "INSTALLED", "LATEST");
         }
-        if (outdated == 0) {
-            out.println("all addons are up to date");
-        }
-        return 0;
+        out.printf("%-28s %-12s %s%n", addon.name(), installed.orElse("-"), newest.get().version());
+      }
     }
+    if (outdated == 0) {
+      out.println("all addons are up to date");
+    }
+    return 0;
+  }
 }

@@ -23,79 +23,91 @@ import java.util.regex.Pattern;
  *
  * <ul>
  *   <li>{@code tag_prefix} — only tags starting with this are considered, and it is stripped before
- *       the version is parsed. Lets one repository publish several addons, e.g. {@code spoken/}
- *       for tags like {@code spoken/v3.8.5}. A {@code v} after the prefix is always optional.
+ *       the version is parsed. Lets one repository publish several addons, e.g. {@code spoken/} for
+ *       tags like {@code spoken/v3.8.5}. A {@code v} after the prefix is always optional.
  *   <li>{@code asset} — glob picking the asset, default {@code *.zip}. Must match exactly one.
  *   <li>{@code prerelease} — {@code true} to consider prereleases, default {@code false}.
  * </ul>
  */
 public final class GitHubBackend implements Backend {
 
-    public static final String ID = "github";
-    private static final Pattern REPO = Pattern.compile("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+");
-    private static final String DIGEST_PREFIX = "sha256:";
+  public static final String ID = "github";
+  private static final Pattern REPO = Pattern.compile("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+");
+  private static final String DIGEST_PREFIX = "sha256:";
 
-    private final GitHubApi api;
+  private final GitHubApi api;
 
-    public GitHubBackend(GitHubApi api) {
-        this.api = api;
+  public GitHubBackend(GitHubApi api) {
+    this.api = api;
+  }
+
+  @Override
+  public String id() {
+    return ID;
+  }
+
+  @Override
+  public List<Release> releases(AddonSpec spec) {
+    var repo = spec.source().reference();
+    if (!REPO.matcher(repo).matches()) {
+      throw new ConfigException("addons." + spec.name() + ": '" + repo + "' is not owner/repo");
     }
+    var prefix = spec.option("tag_prefix").orElse("");
+    var assetGlob = Glob.of(spec.option("asset").orElse("*.zip"));
+    boolean prereleases = spec.option("prerelease").map(Boolean::parseBoolean).orElse(false);
 
-    @Override
-    public String id() {
-        return ID;
+    var result = new ArrayList<Release>();
+    for (var release : api.releases(repo)) {
+      if (release.draft() || (release.prerelease() && !prereleases)) {
+        continue;
+      }
+      var version = versionOf(release.tag(), prefix);
+      if (version.isEmpty() || (version.get().isPrerelease() && !prereleases)) {
+        continue;
+      }
+      var matching = release.assets().stream().filter(a -> assetGlob.matches(a.name())).toList();
+      if (matching.isEmpty()) {
+        continue;
+      }
+      if (matching.size() > 1) {
+        throw new BackendException(
+            "addons."
+                + spec.name()
+                + ": asset pattern '"
+                + assetGlob
+                + "' matches "
+                + matching.stream().map(GitHubApi.GitHubAsset::name).toList()
+                + " in "
+                + release.tag()
+                + "; make 'asset' more specific");
+      }
+      var a = matching.getFirst();
+      result.add(
+          new Release(
+              version.get(),
+              release.tag(),
+              new Asset(a.name(), a.downloadUrl(), a.size(), sha256(a.digest()))));
     }
+    result.sort(Comparator.comparing(Release::version).reversed());
+    return result;
+  }
 
-    @Override
-    public List<Release> releases(AddonSpec spec) {
-        var repo = spec.source().reference();
-        if (!REPO.matcher(repo).matches()) {
-            throw new ConfigException("addons." + spec.name() + ": '" + repo + "' is not owner/repo");
-        }
-        var prefix = spec.option("tag_prefix").orElse("");
-        var assetGlob = Glob.of(spec.option("asset").orElse("*.zip"));
-        boolean prereleases = spec.option("prerelease").map(Boolean::parseBoolean).orElse(false);
+  @Override
+  public void download(Asset asset, Path target) {
+    api.download(asset.url(), target);
+  }
 
-        var result = new ArrayList<Release>();
-        for (var release : api.releases(repo)) {
-            if (release.draft() || (release.prerelease() && !prereleases)) {
-                continue;
-            }
-            var version = versionOf(release.tag(), prefix);
-            if (version.isEmpty() || (version.get().isPrerelease() && !prereleases)) {
-                continue;
-            }
-            var matching = release.assets().stream().filter(a -> assetGlob.matches(a.name())).toList();
-            if (matching.isEmpty()) {
-                continue;
-            }
-            if (matching.size() > 1) {
-                throw new BackendException("addons." + spec.name() + ": asset pattern '" + assetGlob + "' matches "
-                        + matching.stream().map(GitHubApi.GitHubAsset::name).toList() + " in " + release.tag()
-                        + "; make 'asset' more specific");
-            }
-            var a = matching.getFirst();
-            result.add(new Release(version.get(), release.tag(), new Asset(a.name(), a.downloadUrl(), a.size(), sha256(a.digest()))));
-        }
-        result.sort(Comparator.comparing(Release::version).reversed());
-        return result;
+  /** The version in {@code tag} after {@code prefix}, if the tag has that prefix and a version. */
+  public static Optional<Version> versionOf(String tag, String prefix) {
+    if (!tag.startsWith(prefix)) {
+      return Optional.empty();
     }
+    return Version.parse(tag.substring(prefix.length()));
+  }
 
-    @Override
-    public void download(Asset asset, Path target) {
-        api.download(asset.url(), target);
-    }
-
-    /** The version in {@code tag} after {@code prefix}, if the tag has that prefix and a version. */
-    public static Optional<Version> versionOf(String tag, String prefix) {
-        if (!tag.startsWith(prefix)) {
-            return Optional.empty();
-        }
-        return Version.parse(tag.substring(prefix.length()));
-    }
-
-    private static Optional<String> sha256(Optional<String> digest) {
-        return digest.filter(d -> d.regionMatches(true, 0, DIGEST_PREFIX, 0, DIGEST_PREFIX.length()))
-                .map(d -> d.substring(DIGEST_PREFIX.length()).toLowerCase(Locale.ROOT));
-    }
+  private static Optional<String> sha256(Optional<String> digest) {
+    return digest
+        .filter(d -> d.regionMatches(true, 0, DIGEST_PREFIX, 0, DIGEST_PREFIX.length()))
+        .map(d -> d.substring(DIGEST_PREFIX.length()).toLowerCase(Locale.ROOT));
+  }
 }

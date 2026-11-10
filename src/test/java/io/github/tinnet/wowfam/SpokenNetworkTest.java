@@ -18,17 +18,24 @@ import org.junit.jupiter.api.Test;
 @Tag("network")
 class SpokenNetworkTest {
 
-    @Test
-    void findsSpokenReleasesInTheMonorepo() {
-        var env = System.getenv();
-        var token = Optional.ofNullable(env.get("GITHUB_TOKEN"));
-        var backend = new GitHubBackend(new GitHubApi(Http.client(env), GitHubApi.DEFAULT_BASE, token));
-        var spec = new AddonSpec("spoken", Source.parse("github:rusty-key/spoken-wow"), "latest", List.of(),
-                Map.of("tag_prefix", "spoken/", "asset", "Spoken-*.zip"));
+  @Test
+  void findsSpokenReleasesInTheMonorepo() {
+    var env = System.getenv();
+    var token = Optional.ofNullable(env.get("GITHUB_TOKEN"));
+    var backend = new GitHubBackend(new GitHubApi(Http.client(env), GitHubApi.DEFAULT_BASE, token));
+    var spec =
+        new AddonSpec(
+            "spoken",
+            Source.parse("github:rusty-key/spoken-wow"),
+            "latest",
+            List.of(),
+            Map.of("tag_prefix", "spoken/", "asset", "Spoken-*.zip"));
 
-        var releases = backend.releases(spec);
+    var releases = backend.releases(spec);
 
-        assertThat(releases).isNotEmpty().allSatisfy(r -> assertThat(r.tag()).startsWith("spoken/"));
-        assertThat(releases).extracting(Release::asset).allSatisfy(a -> assertThat(a.name()).matches("Spoken-.*\\.zip"));
-    }
+    assertThat(releases).isNotEmpty().allSatisfy(r -> assertThat(r.tag()).startsWith("spoken/"));
+    assertThat(releases)
+        .extracting(Release::asset)
+        .allSatisfy(a -> assertThat(a.name()).matches("Spoken-.*\\.zip"));
+  }
 }

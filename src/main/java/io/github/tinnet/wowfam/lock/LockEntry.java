@@ -9,9 +9,15 @@ import java.util.Optional;
  * @param folders the top-level folders unpacked into the AddOns directory; removed on update
  */
 public record LockEntry(
-        String source, String version, String tag, String asset, String url, Optional<String> sha256, List<String> folders) {
+    String source,
+    String version,
+    String tag,
+    String asset,
+    String url,
+    Optional<String> sha256,
+    List<String> folders) {
 
-    public LockEntry {
-        folders = List.copyOf(folders);
-    }
+  public LockEntry {
+    folders = List.copyOf(folders);
+  }
 }
