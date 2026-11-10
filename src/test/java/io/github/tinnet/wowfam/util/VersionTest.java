@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-class VersionTest {
+final class VersionTest {
 
   /** Versions as text, in the shapes addon tags use: 1-4 numbers, sometimes a prerelease. */
   static final Generator<String> VERSION_TEXT =
@@ -32,16 +32,16 @@ class VersionTest {
         return sb.toString();
       });
 
-  @ParameterizedTest
   @CsvSource({
-    "3.8.4-beta.1, 3.8.4",
-    "3.8.4, 3.8.5",
-    "3.9, 3.10",
     "1.0.0-alpha, 1.0.0-alpha.1",
     "1.0.0-alpha.1, 1.0.0-alpha.beta",
     "1.0.0-beta.2, 1.0.0-beta.11",
     "1.0.0-rc.1, 1.0.0",
+    "3.8.4, 3.8.5",
+    "3.8.4-beta.1, 3.8.4",
+    "3.9, 3.10"
   })
+  @ParameterizedTest
   void ordersLikeSemver(String lower, String higher) {
     assertThat(Version.of(lower)).isLessThan(Version.of(higher));
   }
@@ -52,7 +52,7 @@ class VersionTest {
     assertThat(Version.of("v3.8"))
         .isEqualTo(Version.of("3.8.0"))
         .hasSameHashCodeAs(Version.of("3.8.0"));
-    assertThat(Version.of("v3.8.5").toString()).isEqualTo("3.8.5");
+    assertThat(Version.of("v3.8.5")).hasToString("3.8.5");
   }
 
   @Test
@@ -79,7 +79,7 @@ class VersionTest {
     var text = tc.draw(VERSION_TEXT, "text");
     var v = Version.of(text);
     assertThat(Version.of(v.toString())).isEqualTo(v);
-    assertThat(v.toString()).isEqualTo(text);
+    assertThat(v).hasToString(text);
   }
 
   @HegelTest
@@ -89,7 +89,7 @@ class VersionTest {
     assertThat(Integer.signum(a.compareTo(b))).isEqualTo(-Integer.signum(b.compareTo(a)));
     assertThat(a.compareTo(b) == 0).isEqualTo(a.equals(b));
     if (a.equals(b)) {
-      assertThat(a.hashCode()).isEqualTo(b.hashCode());
+      assertThat(a).hasSameHashCodeAs(b);
     }
   }
 

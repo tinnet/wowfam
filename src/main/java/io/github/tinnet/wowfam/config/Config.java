@@ -1,5 +1,7 @@
 package io.github.tinnet.wowfam.config;
 
+import static java.util.Collections.unmodifiableMap;
+
 import io.github.tinnet.wowfam.util.DependencyOrder;
 import java.nio.file.Path;
 import java.util.Collection;
@@ -14,7 +16,7 @@ public record Config(Path file, Settings settings, Map<String, AddonSpec> addons
   public static final String LOCK_FILE_NAME = "wowfam.lock";
 
   public Config {
-    addons = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(addons));
+    addons = unmodifiableMap(new LinkedHashMap<>(addons));
   }
 
   public Path lockFile() {

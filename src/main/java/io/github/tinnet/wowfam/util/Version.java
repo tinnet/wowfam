@@ -70,7 +70,7 @@ public record Version(
     if (wanted.isEmpty()) {
       return false;
     }
-    var w = wanted.get();
+    var w = wanted.orElseThrow();
     if (w.numbers.size() > numbers.size()) {
       return false;
     }

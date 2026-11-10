@@ -1,11 +1,12 @@
 package io.github.tinnet.wowfam.lock;
 
+import static java.util.Collections.unmodifiableMap;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
@@ -79,7 +80,7 @@ public final class LockFile {
   }
 
   public Map<String, LockEntry> entries() {
-    return Collections.unmodifiableMap(entries);
+    return unmodifiableMap(entries);
   }
 
   public void put(String addon, LockEntry entry) {
@@ -94,8 +95,8 @@ public final class LockFile {
   public Optional<String> ownerOf(String folder) {
     return entries.entrySet().stream()
         .filter(e -> e.getValue().folders().contains(folder))
-        .map(Map.Entry::getKey)
-        .findFirst();
+        .findFirst()
+        .map(Map.Entry::getKey);
   }
 
   /** One {@code [addons.<name>]} table per addon, sorted by name, so diffs stay small. */
@@ -139,7 +140,7 @@ public final class LockFile {
         case '\r' -> sb.append("\\r");
         default -> {
           if (c < 0x20 || c == 0x7f) {
-            sb.append(String.format("\\u%04X", (int) c));
+            sb.append("\\u%04X".formatted((int) c));
           } else {
             sb.append(c);
           }

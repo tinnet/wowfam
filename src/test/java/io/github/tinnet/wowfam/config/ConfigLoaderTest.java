@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-class ConfigLoaderTest {
+final class ConfigLoaderTest {
 
   private static final Path HOME = Path.of("/home/tester");
   private static final Path FILE = Path.of("/games/wow/wowfam.toml");
@@ -42,6 +42,7 @@ class ConfigLoaderTest {
     assertThat(config.addons()).containsOnlyKeys("spoken", "spoken-readables-audio");
 
     var spoken = config.addons().get("spoken");
+    assertThat(spoken).isNotNull();
     assertThat(spoken.source()).isEqualTo(new Source("github", "rusty-key/spoken-wow"));
     assertThat(spoken.wantsLatest()).isTrue();
     assertThat(spoken.options())
@@ -49,6 +50,7 @@ class ConfigLoaderTest {
             Map.of("tag_prefix", "spoken/", "asset", "Spoken-*.zip"));
 
     var audio = config.addons().get("spoken-readables-audio");
+    assertThat(audio).isNotNull();
     assertThat(audio.version()).isEqualTo("2");
     assertThat(audio.depends()).containsExactly("spoken");
 
@@ -75,7 +77,7 @@ class ConfigLoaderTest {
             source = "github:o/r"
             version = 3
             """);
-    assertThat(config.addons().get("a").version()).isEqualTo("3");
+    assertThat(config.addons()).extractingByKey("a").extracting(AddonSpec::version).isEqualTo("3");
   }
 
   @Test

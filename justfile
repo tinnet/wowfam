@@ -34,13 +34,20 @@ run *args:
 poc *args="install": native
     {{ binary }} --config examples/spoken/wowfam.toml {{ args }}
 
-# Format the code with google-java-format
+# Format the Java code (google-java-format) and this justfile
 fmt:
     {{ gradle }} spotlessApply
+    {{ just_executable() }} --fmt
 
-# Fail if the code is not formatted
+# Fail if anything is not formatted
 fmt-check:
     {{ gradle }} spotlessCheck
+    {{ just_executable() }} --fmt --check
+
+# Apply Error Prone / Picnic / NullAway suggested fixes in place, then reformat
+ep-fix:
+    {{ gradle }} compileJava compileTestJava -Perrorprone.patch
+    {{ gradle }} spotlessApply
 
 # Scan the working tree and the git history for secrets
 secrets:

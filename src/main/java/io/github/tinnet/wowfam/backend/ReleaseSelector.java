@@ -1,6 +1,7 @@
 package io.github.tinnet.wowfam.backend;
 
-import java.util.Comparator;
+import static java.util.Comparator.comparing;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -13,7 +14,7 @@ public final class ReleaseSelector {
   public static Optional<Release> newest(List<Release> releases, String requested) {
     return releases.stream()
         .filter(r -> r.version().satisfies(requested))
-        .max(Comparator.comparing(Release::version));
+        .max(comparing(Release::version));
   }
 
   /**
@@ -25,7 +26,8 @@ public final class ReleaseSelector {
     if (lockedTag.isPresent()) {
       var locked =
           releases.stream()
-              .filter(r -> r.tag().equals(lockedTag.get()) && r.version().satisfies(requested))
+              .filter(
+                  r -> r.tag().equals(lockedTag.orElseThrow()) && r.version().satisfies(requested))
               .findFirst();
       if (locked.isPresent()) {
         return locked;

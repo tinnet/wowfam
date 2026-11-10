@@ -14,7 +14,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class ZipExtractorTest {
+final class ZipExtractorTest {
 
   @TempDir Path tmp;
 
@@ -54,7 +54,7 @@ class ZipExtractorTest {
     assertThatThrownBy(() -> ZipExtractor.extract(zip, tmp.resolve("out")))
         .isInstanceOf(InstallException.class)
         .hasMessageContaining("leaves the target folder");
-    assertThat(tmp.getParent().resolve("evil.lua")).doesNotExist();
+    assertThat(tmp.resolveSibling("evil.lua")).doesNotExist();
   }
 
   /** Whatever an archive calls its entries, an accepted one lands inside the target folder. */

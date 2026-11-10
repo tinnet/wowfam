@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -87,7 +88,7 @@ public final class GitHubApi {
             .header("X-GitHub-Api-Version", "2022-11-28");
     // Only send the token to the API host, never to the CDN a download redirects to.
     if (token.isPresent() && uri.getHost() != null && uri.getHost().equals(base.getHost())) {
-      builder.header("Authorization", "Bearer " + token.get());
+      builder.header("Authorization", "Bearer " + token.orElseThrow());
     }
     return builder.GET();
   }
@@ -121,7 +122,7 @@ public final class GitHubApi {
     throw new BackendException("could not " + what + ": HTTP " + status + hint);
   }
 
-  static URI nextLink(String header) {
+  static @Nullable URI nextLink(String header) {
     var m = NEXT_LINK.matcher(header);
     return m.find() ? URI.create(m.group(1)) : null;
   }

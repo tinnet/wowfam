@@ -7,7 +7,7 @@ import java.net.URI;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-class HttpTest {
+final class HttpTest {
 
   private final Http.EnvProxySelector selector =
       (Http.EnvProxySelector)

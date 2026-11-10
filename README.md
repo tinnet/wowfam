@@ -70,9 +70,18 @@ just network-test   # tests against the real GitHub API
 just run --help     # run on the JVM
 just native         # -> build/native/nativeCompile/wowfam
 just poc            # install the Spoken example into examples/spoken/AddOns
-just fmt            # google-java-format 2.0 via Spotless (`just fmt-check` to verify)
+just fmt            # google-java-format 2.0 via Spotless, plus `just --fmt` (`just fmt-check` to verify)
+just ep-fix         # apply Error Prone's suggested fixes in place
 just secrets        # betterleaks over the tree and the git history
 ```
+
+Every compile runs [Error Prone](https://errorprone.info) with Picnic's
+[error-prone-support](https://error-prone.picnic.tech) checks and Refaster rules, and
+[NullAway](https://github.com/uber/NullAway) in JSpecify mode: each package is `@NullMarked`
+(`package-info.java`), so anything that may be null must say `@Nullable`. Findings fail the build.
+This happens while `javac` compiles the JVM bytecode; the native image is built from that afterwards.
+Error Prone is pinned to the version Picnic's release is built against (2.50.0) — newer ones break
+its checks — so bump the two together. Refaster rules that would introduce Guava are switched off.
 
 Without mise, `./gradlew` works on its own: Gradle's toolchain support (with the foojay resolver)
 downloads a JDK 25 / GraalVM 25 if none is installed.

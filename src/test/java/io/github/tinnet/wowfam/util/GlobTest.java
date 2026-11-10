@@ -7,7 +7,7 @@ import dev.hegel.HegelTest;
 import dev.hegel.TestCase;
 import org.junit.jupiter.api.Test;
 
-class GlobTest {
+final class GlobTest {
 
   @Test
   void matchesAssetNames() {

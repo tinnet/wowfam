@@ -1,7 +1,6 @@
 package io.github.tinnet.wowfam.install;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -70,7 +69,7 @@ public record TocFile(Map<String, String> metadata) {
           .sorted()
           .map(p -> {
             try {
-              return parse(Files.readString(p, StandardCharsets.UTF_8));
+              return parse(Files.readString(p));
             } catch (IOException e) {
               throw new InstallException("cannot read " + p + ": " + e.getMessage(), e);
             }

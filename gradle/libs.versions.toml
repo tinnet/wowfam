@@ -6,6 +6,12 @@ assertj = "3.27.7"
 hegel = "0.11.1"
 graalvm-buildtools = "1.1.18"
 spotless = "8.11.0"
+errorprone-plugin = "5.2.0"
+# Matches the Error Prone that error-prone-support (Picnic) is built against; newer ones break its checks.
+errorprone = "2.50.0"
+picnic-errorprone = "0.30.0"
+nullaway = "0.14.3"
+jspecify = "1.0.1"
 google-java-format = "2.0.0"
 
 [libraries]
@@ -13,6 +19,11 @@ picocli = { module = "info.picocli:picocli", version.ref = "picocli" }
 picocli-codegen = { module = "info.picocli:picocli-codegen", version.ref = "picocli" }
 jackson-databind = { module = "tools.jackson.core:jackson-databind", version.ref = "jackson" }
 jackson-toml = { module = "tools.jackson.dataformat:jackson-dataformat-toml", version.ref = "jackson" }
+jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
+errorprone-core = { module = "com.google.errorprone:error_prone_core", version.ref = "errorprone" }
+picnic-errorprone-contrib = { module = "tech.picnic.error-prone-support:error-prone-contrib", version.ref = "picnic-errorprone" }
+picnic-refaster-runner = { module = "tech.picnic.error-prone-support:refaster-runner", version.ref = "picnic-errorprone" }
+nullaway = { module = "com.uber.nullaway:nullaway", version.ref = "nullaway" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-launcher = { module = "org.junit.platform:junit-platform-launcher" }
@@ -22,3 +33,4 @@ hegel = { module = "dev.hegel:hegel", version.ref = "hegel" }
 [plugins]
 graalvm-native = { id = "org.graalvm.buildtools.native", version.ref = "graalvm-buildtools" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+errorprone = { id = "net.ltgt.errorprone", version.ref = "errorprone-plugin" }

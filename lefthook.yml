@@ -5,7 +5,7 @@ pre-commit:
     - name: secrets
       run: betterleaks git --pre-commit --staged --no-banner --redact -v
     - name: format
-      glob: "*.java"
+      glob: "{*.java,justfile}"
       run: just fmt
       stage_fixed: true
 

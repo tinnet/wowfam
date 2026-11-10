@@ -11,7 +11,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class LockFileTest {
+final class LockFileTest {
 
   @Test
   void roundTripsThroughToml(@TempDir Path tmp) {
@@ -45,7 +45,7 @@ class LockFileTest {
     assertThat(reread.entries())
         .containsEntry("spoken", spoken)
         .containsEntry("spoken-readables-audio", audio);
-    assertThat(reread.ownerOf("Spoken_Quests")).contains("spoken");
+    assertThat(reread.ownerOf("Spoken_Quests")).hasValue("spoken");
     assertThat(reread.ownerOf("Unknown")).isEmpty();
   }
 
@@ -84,6 +84,6 @@ class LockFileTest {
     var lock = LockFile.parse(Path.of("wowfam.lock"), "");
     lock.put(name, entry);
 
-    assertThat(LockFile.parse(Path.of("wowfam.lock"), lock.toToml()).get(name)).contains(entry);
+    assertThat(LockFile.parse(Path.of("wowfam.lock"), lock.toToml()).get(name)).hasValue(entry);
   }
 }
