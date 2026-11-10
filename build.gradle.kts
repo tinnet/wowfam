@@ -88,7 +88,7 @@ application {
     applicationName = "wowfam"
 }
 
-// `./gradlew compileJava compileTestJava -Perrorprone.patch` (or `just ep-fix`) applies the
+// `gradle compileJava compileTestJava -Perrorprone.patch` (or `just ep-fix`) applies the
 // suggested fixes in place instead of reporting them.
 val errorpronePatch = providers.gradleProperty("errorprone.patch").isPresent
 
@@ -126,7 +126,7 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.test {
     useJUnitPlatform {
-        // Tests tagged "network" hit the real GitHub API; run them with ./gradlew networkTest.
+        // Tests tagged "network" hit the real GitHub API; run them with gradle networkTest.
         excludeTags("network")
     }
     // Hegel binds its engine over the FFM API.

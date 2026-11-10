@@ -60,8 +60,8 @@ After installing, each folder's `.toc` is read and required dependencies (`## De
 
 ## Building
 
-Tools are pinned in [`mise.toml`](mise.toml) (GraalVM 25, just, lefthook, betterleaks) and tasks
-live in the [`justfile`](justfile):
+Tools are pinned in [`mise.toml`](mise.toml) (GraalVM 25, Gradle, just, lefthook, betterleaks) and
+tasks live in the [`justfile`](justfile):
 
 ```sh
 just setup          # mise install + lefthook install (git hooks)
@@ -83,8 +83,9 @@ This happens while `javac` compiles the JVM bytecode; the native image is built 
 Error Prone is pinned to the version Picnic's release is built against (2.50.0) — newer ones break
 its checks — so bump the two together. Refaster rules that would introduce Guava are switched off.
 
-Without mise, `./gradlew` works on its own: Gradle's toolchain support (with the foojay resolver)
-downloads a JDK 25 / GraalVM 25 if none is installed.
+There is no Gradle wrapper: mise installs the Gradle pinned in `mise.toml`. Without mise, any
+Gradle 9.9 on the `PATH` works, and its toolchain support (with the foojay resolver) downloads a
+JDK 25 / GraalVM 25 if none is installed.
 
 Git hooks ([`lefthook.yml`](lefthook.yml)): pre-commit scans staged changes for secrets and
 formats staged Java files,

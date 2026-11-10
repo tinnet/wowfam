@@ -14,7 +14,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-/** Talks to the real GitHub API. Run with {@code ./gradlew networkTest}. */
+/** Talks to the real GitHub API. Run with {@code gradle networkTest}. */
 @Tag("network")
 final class SpokenNetworkTest {
 

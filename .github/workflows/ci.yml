@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # full history for the secrets scan
-      - uses: jdx/mise-action@v5 # java, just, betterleaks from mise.toml
+      - uses: jdx/mise-action@v5 # java, gradle, just, betterleaks from mise.toml
       - uses: gradle/actions/setup-gradle@v4
       - run: just ci
 
@@ -30,8 +30,11 @@ jobs:
           java-version: "25"
           distribution: graalvm-community
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: jdx/mise-action@v5 # only gradle; the JDK comes from setup-graalvm
+        with:
+          install_args: gradle
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew nativeCompile
+      - run: gradle nativeCompile
       - name: Smoke test
         shell: bash
         run: build/native/nativeCompile/wowfam --version
