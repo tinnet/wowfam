@@ -152,6 +152,8 @@ graalvmNative {
             }
             buildArgs.addAll(
                 "--no-fallback",
+                // Optimise for size: a CLI that mostly waits on downloads gains little from -O2.
+                "-Os",
                 "--enable-url-protocols=https",
                 "-H:+ReportExceptionStackTraces",
             )
