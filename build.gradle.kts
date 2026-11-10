@@ -28,6 +28,8 @@ dependencies {
     implementation(libs.picocli)
     // @NullMarked / @Nullable, checked by NullAway at compile time.
     implementation(libs.jspecify)
+    // @TargetClass/@Substitute for native-image substitutions; provided by native-image itself.
+    compileOnly(libs.graalvm.nativeimage)
     implementation(libs.jackson.databind)
     implementation(libs.jackson.toml)
     // Generates GraalVM reflection/resource config for the picocli commands at compile time.

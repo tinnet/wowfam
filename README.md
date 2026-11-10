@@ -103,6 +103,7 @@ no GraalVM release for JDK 26 or 27.
 | `install`   | download → verify → unpack → swap folders; zip-slip-safe extraction; `.toc` parsing   |
 | `lock`      | `wowfam.lock`                                                                         |
 | `util`      | versions (mise-style matching), globs, dependency ordering                            |
+| `nativeimage` | GraalVM substitutions; drops Jackson's unused XML/SQL handlers (−7 MB)              |
 
 Adding a backend means implementing `Backend` (list releases with their asset, download an asset)
 and registering it in `WowfamCommand.defaultBackends`.
