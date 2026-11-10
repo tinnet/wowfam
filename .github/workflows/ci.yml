@@ -10,12 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: "25"
+          fetch-depth: 0 # full history for the secrets scan
+      - uses: jdx/mise-action@v5 # java, just, betterleaks from mise.toml
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew test
+      - run: just ci
 
   native:
     needs: test

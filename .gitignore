@@ -8,3 +8,5 @@ out/
 # Local trial runs of the example
 examples/**/AddOns/
 examples/**/wowfam.lock
+# betterleaks reports
+betterleaks-report.*
