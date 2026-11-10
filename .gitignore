@@ -1,0 +1,10 @@
+.gradle/
+build/
+.kotlin/
+*.iml
+.idea/
+.vscode/
+out/
+# Local trial runs of the example
+examples/**/AddOns/
+examples/**/wowfam.lock
