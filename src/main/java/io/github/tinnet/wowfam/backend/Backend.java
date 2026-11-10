@@ -10,15 +10,15 @@ import java.util.List;
  */
 public interface Backend {
 
-    /** The prefix used in {@code source = "<id>:..."}. */
-    String id();
+  /** The prefix used in {@code source = "<id>:..."}. */
+  String id();
 
-    /**
-     * Every release of the addon this backend can offer, each with the asset to install, newest
-     * first. Choosing among them (requested version, lock file) is not the backend's job.
-     */
-    List<Release> releases(AddonSpec spec);
+  /**
+   * Every release of the addon this backend can offer, each with the asset to install, newest
+   * first. Choosing among them (requested version, lock file) is not the backend's job.
+   */
+  List<Release> releases(AddonSpec spec);
 
-    /** Downloads the asset to {@code target}, replacing it if present. */
-    void download(Asset asset, Path target);
+  /** Downloads the asset to {@code target}, replacing it if present. */
+  void download(Asset asset, Path target);
 }

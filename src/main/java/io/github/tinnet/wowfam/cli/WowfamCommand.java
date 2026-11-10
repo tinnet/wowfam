@@ -22,90 +22,100 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.ScopeType;
 
 @Command(
-        name = "wowfam",
-        mixinStandardHelpOptions = true,
-        versionProvider = WowfamCommand.VersionProvider.class,
-        description = "Installs and updates World of Warcraft addons listed in wowfam.toml.",
-        subcommands = {
-            InstallCommand.class,
-            UpdateCommand.class,
-            ListCommand.class,
-            OutdatedCommand.class,
-            CommandLine.HelpCommand.class
-        })
+    name = "wowfam",
+    mixinStandardHelpOptions = true,
+    versionProvider = WowfamCommand.VersionProvider.class,
+    description = "Installs and updates World of Warcraft addons listed in wowfam.toml.",
+    subcommands = {
+      InstallCommand.class,
+      UpdateCommand.class,
+      ListCommand.class,
+      OutdatedCommand.class,
+      CommandLine.HelpCommand.class
+    })
 public final class WowfamCommand implements Runnable {
 
-    @Option(
-            names = {"-C", "--config"},
-            scope = ScopeType.INHERIT,
-            description = "Path to wowfam.toml (default: ./wowfam.toml).",
-            paramLabel = "FILE")
-    Path config;
+  @Option(
+      names = {"-C", "--config"},
+      scope = ScopeType.INHERIT,
+      description = "Path to wowfam.toml (default: ./wowfam.toml).",
+      paramLabel = "FILE")
+  Path config;
 
-    @Option(
-            names = "--addons-dir",
-            scope = ScopeType.INHERIT,
-            description = "Override settings.addons_dir.",
-            paramLabel = "DIR")
-    Path addonsDir;
+  @Option(
+      names = "--addons-dir",
+      scope = ScopeType.INHERIT,
+      description = "Override settings.addons_dir.",
+      paramLabel = "DIR")
+  Path addonsDir;
 
-    @CommandLine.Spec
-    CommandLine.Model.CommandSpec spec;
+  @CommandLine.Spec CommandLine.Model.CommandSpec spec;
 
-    private final Map<String, String> env;
-    private final Supplier<Backends> backends;
+  private final Map<String, String> env;
+  private final Supplier<Backends> backends;
 
-    public WowfamCommand(Map<String, String> env, Supplier<Backends> backends) {
-        this.env = env;
-        this.backends = backends;
+  public WowfamCommand(Map<String, String> env, Supplier<Backends> backends) {
+    this.env = env;
+    this.backends = backends;
+  }
+
+  public static CommandLine newCommandLine() {
+    var env = System.getenv();
+    return newCommandLine(env, () -> defaultBackends(env));
+  }
+
+  public static CommandLine newCommandLine(Map<String, String> env, Supplier<Backends> backends) {
+    var cl = new CommandLine(new WowfamCommand(env, backends));
+    cl.setExecutionExceptionHandler((ex, commandLine, parseResult) -> {
+      if (ex instanceof ConfigException
+          || ex instanceof BackendException
+          || ex instanceof InstallException) {
+        commandLine
+            .getErr()
+            .println(commandLine.getColorScheme().errorText("error: " + ex.getMessage()));
+        return 1;
+      }
+      throw ex;
+    });
+    return cl;
+  }
+
+  static Backends defaultBackends(Map<String, String> env) {
+    var token =
+        Optional.ofNullable(env.get("GITHUB_TOKEN"))
+            .or(() -> Optional.ofNullable(env.get("GH_TOKEN")));
+    var base =
+        Optional.ofNullable(env.get("WOWFAM_GITHUB_API"))
+            .map(URI::create)
+            .orElse(GitHubApi.DEFAULT_BASE);
+    return new Backends(List.of(new GitHubBackend(new GitHubApi(Http.client(env), base, token))));
+  }
+
+  @Override
+  public void run() {
+    spec.commandLine().usage(spec.commandLine().getOut());
+  }
+
+  Config loadConfig() {
+    var file = config != null ? config : Path.of(Config.FILE_NAME);
+    var loaded = new ConfigLoader(env, Path.of(System.getProperty("user.home"))).load(file);
+    if (addonsDir == null) {
+      return loaded;
     }
+    return new Config(
+        loaded.file(),
+        new Settings(addonsDir.toAbsolutePath().normalize(), loaded.settings().cacheDir()),
+        loaded.addons());
+  }
 
-    public static CommandLine newCommandLine() {
-        var env = System.getenv();
-        return newCommandLine(env, () -> defaultBackends(env));
-    }
+  Backends backends() {
+    return backends.get();
+  }
 
-    public static CommandLine newCommandLine(Map<String, String> env, Supplier<Backends> backends) {
-        var cl = new CommandLine(new WowfamCommand(env, backends));
-        cl.setExecutionExceptionHandler((ex, commandLine, parseResult) -> {
-            if (ex instanceof ConfigException || ex instanceof BackendException || ex instanceof InstallException) {
-                commandLine.getErr().println(commandLine.getColorScheme().errorText("error: " + ex.getMessage()));
-                return 1;
-            }
-            throw ex;
-        });
-        return cl;
-    }
-
-    static Backends defaultBackends(Map<String, String> env) {
-        var token = Optional.ofNullable(env.get("GITHUB_TOKEN")).or(() -> Optional.ofNullable(env.get("GH_TOKEN")));
-        var base = Optional.ofNullable(env.get("WOWFAM_GITHUB_API")).map(URI::create).orElse(GitHubApi.DEFAULT_BASE);
-        return new Backends(List.of(new GitHubBackend(new GitHubApi(Http.client(env), base, token))));
-    }
-
+  static final class VersionProvider implements CommandLine.IVersionProvider {
     @Override
-    public void run() {
-        spec.commandLine().usage(spec.commandLine().getOut());
+    public String[] getVersion() {
+      return new String[] {"wowfam " + io.github.tinnet.wowfam.BuildInfo.VERSION};
     }
-
-    Config loadConfig() {
-        var file = config != null ? config : Path.of(Config.FILE_NAME);
-        var loaded = new ConfigLoader(env, Path.of(System.getProperty("user.home"))).load(file);
-        if (addonsDir == null) {
-            return loaded;
-        }
-        return new Config(loaded.file(), new Settings(addonsDir.toAbsolutePath().normalize(), loaded.settings().cacheDir()),
-                loaded.addons());
-    }
-
-    Backends backends() {
-        return backends.get();
-    }
-
-    static final class VersionProvider implements CommandLine.IVersionProvider {
-        @Override
-        public String[] getVersion() {
-            return new String[] {"wowfam " + io.github.tinnet.wowfam.BuildInfo.VERSION};
-        }
-    }
+  }
 }

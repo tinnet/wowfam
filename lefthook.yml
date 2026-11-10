@@ -4,6 +4,10 @@ pre-commit:
   jobs:
     - name: secrets
       run: betterleaks git --pre-commit --staged --no-banner --redact -v
+    - name: format
+      glob: "*.java"
+      run: just fmt
+      stage_fixed: true
 
 pre-push:
   jobs:

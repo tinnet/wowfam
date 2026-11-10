@@ -34,13 +34,21 @@ run *args:
 poc *args="install": native
     {{ binary }} --config examples/spoken/wowfam.toml {{ args }}
 
+# Format the code with google-java-format
+fmt:
+    {{ gradle }} spotlessApply
+
+# Fail if the code is not formatted
+fmt-check:
+    {{ gradle }} spotlessCheck
+
 # Scan the working tree and the git history for secrets
 secrets:
     betterleaks dir . --no-banner --redact -v
     betterleaks git . --no-banner --redact -v
 
 # What CI runs
-ci: secrets test
+ci: secrets fmt-check test
 
 clean:
     {{ gradle }} clean

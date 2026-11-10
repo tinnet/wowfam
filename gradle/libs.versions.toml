@@ -5,6 +5,8 @@ junit = "6.1.3"
 assertj = "3.27.7"
 hegel = "0.11.1"
 graalvm-buildtools = "1.1.18"
+spotless = "8.11.0"
+google-java-format = "2.0.0"
 
 [libraries]
 picocli = { module = "info.picocli:picocli", version.ref = "picocli" }
@@ -19,3 +21,4 @@ hegel = { module = "dev.hegel:hegel", version.ref = "hegel" }
 
 [plugins]
 graalvm-native = { id = "org.graalvm.buildtools.native", version.ref = "graalvm-buildtools" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

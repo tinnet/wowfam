@@ -1,6 +1,7 @@
 plugins {
     application
     alias(libs.plugins.graalvm.native)
+    alias(libs.plugins.spotless)
 }
 
 group = "io.github.tinnet"
@@ -31,6 +32,16 @@ dependencies {
     testImplementation(libs.assertj)
     testImplementation(libs.hegel)
     testRuntimeOnly(libs.junit.launcher)
+}
+
+spotless {
+    java {
+        target("src/**/*.java") // not the generated BuildInfo
+        googleJavaFormat(libs.versions.google.java.format.get())
+        removeUnusedImports()
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
 }
 
 // Bakes the project version into the binary (works the same on the JVM and in a native image).
