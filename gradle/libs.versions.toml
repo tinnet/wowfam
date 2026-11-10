@@ -12,6 +12,7 @@ errorprone = "2.50.0"
 picnic-errorprone = "0.30.0"
 nullaway = "0.14.3"
 jspecify = "1.0.1"
+graalvm-sdk = "25.0.2"
 google-java-format = "2.0.0"
 
 [libraries]
@@ -19,6 +20,7 @@ picocli = { module = "info.picocli:picocli", version.ref = "picocli" }
 picocli-codegen = { module = "info.picocli:picocli-codegen", version.ref = "picocli" }
 jackson-databind = { module = "tools.jackson.core:jackson-databind", version.ref = "jackson" }
 jackson-toml = { module = "tools.jackson.dataformat:jackson-dataformat-toml", version.ref = "jackson" }
+graalvm-nativeimage = { module = "org.graalvm.sdk:nativeimage", version.ref = "graalvm-sdk" }
 jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
 errorprone-core = { module = "com.google.errorprone:error_prone_core", version.ref = "errorprone" }
 picnic-errorprone-contrib = { module = "tech.picnic.error-prone-support:error-prone-contrib", version.ref = "picnic-errorprone" }
