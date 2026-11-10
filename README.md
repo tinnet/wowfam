@@ -60,15 +60,24 @@ After installing, each folder's `.toc` is read and required dependencies (`## De
 
 ## Building
 
-Requires JDK 25 for development; a GraalVM 25 for the native binary. Gradle's toolchain support
-(with the foojay resolver) downloads either if none is installed.
+Tools are pinned in [`mise.toml`](mise.toml) (GraalVM 25, just, lefthook, betterleaks) and tasks
+live in the [`justfile`](justfile):
 
 ```sh
-./gradlew test             # unit + property tests (JUnit 6, AssertJ, Hegel)
-./gradlew networkTest      # tests against the real GitHub API
-./gradlew run --args="--help"
-./gradlew nativeCompile    # -> build/native/nativeCompile/wowfam
+just setup          # mise install + lefthook install (git hooks)
+just test           # unit + property tests (JUnit 6, AssertJ, Hegel)
+just network-test   # tests against the real GitHub API
+just run --help     # run on the JVM
+just native         # -> build/native/nativeCompile/wowfam
+just poc            # install the Spoken example into examples/spoken/AddOns
+just secrets        # betterleaks over the tree and the git history
 ```
+
+Without mise, `./gradlew` works on its own: Gradle's toolchain support (with the foojay resolver)
+downloads a JDK 25 / GraalVM 25 if none is installed.
+
+Git hooks ([`lefthook.yml`](lefthook.yml)): pre-commit scans staged changes for secrets,
+pre-push runs the tests.
 
 Why Java 25: it is the current LTS and the newest JDK that GraalVM Native Image supports — there is
 no GraalVM release for JDK 26 or 27.

@@ -1,0 +1,11 @@
+# Git hooks; `lefthook install` (or `just setup`) activates them.
+
+pre-commit:
+  jobs:
+    - name: secrets
+      run: betterleaks git --pre-commit --staged --no-banner --redact -v
+
+pre-push:
+  jobs:
+    - name: test
+      run: just test
