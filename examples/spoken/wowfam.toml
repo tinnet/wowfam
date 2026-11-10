@@ -1,0 +1,30 @@
+# Proof of concept: Spoken (https://github.com/rusty-key/spoken-wow).
+#
+# Spoken lives in one repository that releases several things under prefixed tags:
+#   spoken/v3.8.5           Spoken-3.8.5.zip            the player + its modules (Spoken, Spoken_Quests, ...)
+#   bosses-audio/v1.0.0     SpokenBossesAudio-1.0.0.zip a sound pack that needs the player
+#   readables-audio/v2.3.0  SpokenReadablesAudio-...    another sound pack
+#
+# Try it:  wowfam --config examples/spoken/wowfam.toml install
+
+[settings]
+# Point this at your game's Interface/AddOns folder, e.g.
+#   "~/Games/World of Warcraft/_classic_era_/Interface/AddOns"
+# Relative paths are relative to this file.
+addons_dir = "AddOns"
+
+[addons.spoken]
+source = "github:rusty-key/spoken-wow"
+version = "latest"           # or "3.8.5", or "3" for the newest 3.x
+tag_prefix = "spoken/"       # only tags for the player addon
+asset = "Spoken-*.zip"
+
+[addons.spoken-bosses-audio]
+source = "github:rusty-key/spoken-wow"
+tag_prefix = "bosses-audio/"
+depends = ["spoken"]         # installed after spoken; `wowfam install spoken-bosses-audio` pulls it in
+
+[addons.spoken-readables-audio]
+source = "github:rusty-key/spoken-wow"
+tag_prefix = "readables-audio/"
+depends = ["spoken"]
