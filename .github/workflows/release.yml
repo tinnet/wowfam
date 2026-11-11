@@ -67,6 +67,7 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+          skip-decompress: true # keep the Windows .zip a .zip
       - name: Checksums
         working-directory: dist
         run: sha256sum wowfam-* | tee SHA256SUMS
