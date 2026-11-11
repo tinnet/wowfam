@@ -10,6 +10,11 @@ pre-commit:
       stage_fixed: true
 
 pre-push:
+  # A script in .lefthook/pre-push/, not `run`: lefthook skips `run` jobs in
+  # pre-push when `git diff HEAD @{push}` is empty, e.g. when pushing a branch
+  # you're not on.
   jobs:
-    - name: test
-      run: just test
+    - name: signed
+      script: signed.sh
+      runner: sh
+      use_stdin: true

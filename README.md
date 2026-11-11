@@ -89,7 +89,7 @@ resolver) downloads a JDK 25 / GraalVM 25 if none is installed.
 
 Git hooks ([`lefthook.yml`](lefthook.yml)): pre-commit scans staged changes for secrets and
 formats staged Java files,
-pre-push runs the tests.
+pre-push checks that every pushed commit is signed.
 
 Why Java 25: it is the current LTS and the newest JDK that GraalVM Native Image supports — there is
 no GraalVM release for JDK 26 or 27.
