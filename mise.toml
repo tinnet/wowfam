@@ -1,7 +1,8 @@
 # Dev tools for this repo. `mise install` (or `just setup`) gets everything.
-# Gradle itself comes from ./gradlew.
 
 [tools]
+# Gradle runs on the java below; there is no wrapper.
+gradle = "9.9.0"
 # A GraalVM, so the same JDK runs the build, the tests and `nativeCompile`.
 java = "oracle-graalvm-25"
 just = "1.59.0"
