@@ -25,7 +25,7 @@ final class OutdatedCommand implements Callable<Integer> {
     var config = root.loadConfig();
     var lock = LockFile.read(config.lockFile());
     var backends = root.backends();
-    var out = spec.commandLine().getOut();
+    var table = new Table("ADDON", "INSTALLED", "LATEST");
     int outdated = 0;
     for (var addon : config.addons().values()) {
       var backend = backends.get(addon.source().backend());
@@ -40,16 +40,15 @@ final class OutdatedCommand implements Callable<Integer> {
               .map(v -> v.compareTo(newest.orElseThrow().version()) < 0)
               .orElse(true);
       if (isOutdated) {
-        if (outdated++ == 0) {
-          out.printf("%-28s %-12s %s%n", "ADDON", "INSTALLED", "LATEST");
-        }
-        out.printf(
-            "%-28s %-12s %s%n",
-            addon.name(), installed.orElse("-"), newest.orElseThrow().version());
+        outdated++;
+        table.row(addon.name(), installed.orElse("-"), newest.orElseThrow().version().toString());
       }
     }
+    var out = spec.commandLine().getOut();
     if (outdated == 0) {
       out.println("all addons are up to date");
+    } else {
+      table.print(out);
     }
     return 0;
   }

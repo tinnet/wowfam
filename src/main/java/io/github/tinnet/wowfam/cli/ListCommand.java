@@ -23,12 +23,12 @@ final class ListCommand implements Callable<Integer> {
   public Integer call() {
     var config = root.loadConfig();
     var lock = LockFile.read(config.lockFile());
-    var out = spec.commandLine().getOut();
-    out.printf("%-28s %-12s %-12s %s%n", "ADDON", "REQUESTED", "INSTALLED", "SOURCE");
+    var table = new Table("ADDON", "REQUESTED", "INSTALLED", "SOURCE");
     for (var spec : config.addons().values()) {
       var installed = lock.get(spec.name()).map(LockEntry::version).orElse("-");
-      out.printf("%-28s %-12s %-12s %s%n", spec.name(), spec.version(), installed, spec.source());
+      table.row(spec.name(), spec.version(), installed, spec.source().toString());
     }
+    table.print(spec.commandLine().getOut());
     return 0;
   }
 }
