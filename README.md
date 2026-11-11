@@ -106,8 +106,9 @@ without mise, any Gradle 9.9 on the `PATH` works, and its toolchain support (wit
 resolver) downloads a JDK 25 / GraalVM 25 if none is installed.
 
 Git hooks ([`lefthook.yml`](lefthook.yml)): pre-commit scans staged changes for secrets and
-formats staged Java files,
-pre-push checks that every pushed commit is signed.
+formats staged Java files, commit-msg requires a [Conventional Commit](AGENTS.md#commits), and
+pre-push checks that every pushed commit is signed. [`AGENTS.md`](AGENTS.md) has the working
+conventions.
 
 Why Java 25: it is the current LTS and the newest JDK that GraalVM Native Image supports — there is
 no GraalVM release for JDK 26 or 27.

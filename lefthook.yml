@@ -9,6 +9,12 @@ pre-commit:
       run: just fmt
       stage_fixed: true
 
+commit-msg:
+  jobs:
+    - name: conventional
+      script: conventional.sh
+      runner: sh
+
 pre-push:
   # A script in .lefthook/pre-push/, not `run`: lefthook skips `run` jobs in
   # pre-push when `git diff HEAD @{push}` is empty, e.g. when pushing a branch
