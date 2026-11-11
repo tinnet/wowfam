@@ -272,15 +272,30 @@ final class GitHubBackendTest {
   }
 
   @Test
-  void ambiguousAssetPatternIsAnError() {
+  void ambiguousAssetPatternIsAnErrorForThatRelease() {
     github.release(
         REPO,
         "v1.0.0",
         addonZip("A-1.0.0.zip", "1.0.0", Map.of("A", "")),
         addonZip("A-nolib-1.0.0.zip", "1.0.0", Map.of("A", "")));
-    assertThatThrownBy(() -> releases(Map.of()))
+    var release = releases(Map.of()).getFirst();
+    assertThatThrownBy(release::asset)
         .isInstanceOf(BackendException.class)
         .hasMessageContaining("make 'asset' more specific");
+  }
+
+  @Test
+  void ambiguousOldReleaseDoesNotBlockNewerOnes() {
+    github
+        .release(
+            REPO,
+            "v1.0.0",
+            addonZip("A-1.0.0.zip", "1.0.0", Map.of("A", "")),
+            addonZip("A-1.0.0-classic.zip", "1.0.0", Map.of("A", "")))
+        .release(REPO, "v2.0.0", addonZip("A-2.0.0.zip", "2.0.0", Map.of("A", "")));
+    var newest = releases(Map.of("asset", "A-*.zip")).getFirst();
+    assertThat(newest.tag()).isEqualTo("v2.0.0");
+    assertThat(newest.asset().name()).isEqualTo("A-2.0.0.zip");
   }
 
   @Test

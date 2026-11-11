@@ -1,5 +1,6 @@
 package io.github.tinnet.wowfam.install;
 
+import io.github.tinnet.wowfam.backend.BackendException;
 import io.github.tinnet.wowfam.backend.Backends;
 import io.github.tinnet.wowfam.backend.Release;
 import io.github.tinnet.wowfam.backend.ReleaseSelector;
@@ -141,6 +142,11 @@ public final class Installer {
           locked.orElseThrow().folders());
     }
 
+    try {
+      release.asset();
+    } catch (BackendException e) {
+      throw new BackendException("addons." + spec.name() + ": " + e.getMessage(), e);
+    }
     var archive = fetch(config, spec, release);
     log.accept(
         "installing " + spec.name() + " " + release.version() + " from " + release.asset().name());

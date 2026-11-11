@@ -116,19 +116,13 @@ public final class GitHubBackend implements Backend {
       if (matching.isEmpty()) {
         continue;
       }
-      if (matching.size() > 1) {
-        throw new BackendException(
-            "addons."
-                + spec.name()
-                + ": asset pattern '"
-                + assetGlob
-                + "' matches "
-                + matching.stream().map(GitHubApi.GitHubAsset::name).toList()
-                + " in "
-                + release.tag()
-                + "; make 'asset' more specific");
-      }
-      result.add(new Release(version.orElseThrow(), release.tag(), asset(matching.getFirst())));
+      // Several matches only fail if this release gets picked (Release.asset()): an old release
+      // that also shipped a classic zip must not block installing a newer one.
+      result.add(
+          new Release(
+              version.orElseThrow(),
+              release.tag(),
+              matching.stream().map(GitHubBackend::asset).toList()));
     }
     result.sort(comparing(Release::version).reversed());
     return result;
@@ -141,7 +135,8 @@ public final class GitHubBackend implements Backend {
   @Override
   public Optional<Release> resolve(AddonSpec spec, Release release) {
     var flavor = spec.option("flavor").map(GitHubBackend::canonicalFlavor);
-    if (flavor.isEmpty() || !release.asset().name().equals(RELEASE_JSON)) {
+    if (flavor.isEmpty()
+        || release.assets().stream().noneMatch(a -> a.name().equals(RELEASE_JSON))) {
       return Optional.of(release);
     }
     var attached =
