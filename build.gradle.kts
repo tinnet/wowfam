@@ -9,7 +9,9 @@ import net.ltgt.gradle.errorprone.CheckSeverity
 import net.ltgt.gradle.errorprone.errorprone
 
 group = "io.github.tinnet"
-version = "0.1.0-SNAPSHOT"
+// CalVer. The release workflow passes the tag's version (`-PreleaseVersion=2026.11.10`);
+// everything else is a `dev` build.
+version = providers.gradleProperty("releaseVersion").getOrElse("dev")
 
 // Java 25: the newest LTS and the newest release GraalVM Native Image supports.
 val javaVersion = 25

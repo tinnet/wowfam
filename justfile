@@ -56,5 +56,12 @@ secrets:
 # What CI runs
 ci: secrets fmt-check test
 
+# Tag a CalVer release from main (today's date, or e.g. `just release 2026.11.10.1`) and push it
+[unix]
+release version=`date +%Y.%m.%d`:
+    git diff --quiet HEAD && git fetch -q origin main && test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || { echo "release from a clean main that matches origin/main" >&2; exit 1; }
+    git tag -s "v{{ version }}" -m "wowfam {{ version }}"
+    git push origin "v{{ version }}"
+
 clean:
     gradle clean

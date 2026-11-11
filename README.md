@@ -7,6 +7,17 @@ unpacking its addon folders into your `Interface/AddOns` directory.
 
 Built with Java 25 and compiled to a single native binary with GraalVM Native Image.
 
+## Install
+
+Releases ship native binaries for Linux x86_64, macOS arm64 and Windows x86_64. With
+[mise](https://mise.jdx.dev)'s GitHub backend:
+
+```sh
+mise use -g github:tinnet/wowfam
+```
+
+While the repository is private, mise needs a token that can read it (`GITHUB_TOKEN`).
+
 ## Usage
 
 ```sh
@@ -73,7 +84,14 @@ just poc            # install the Spoken example into examples/spoken/AddOns
 just fmt            # google-java-format 2.0 via Spotless, plus `just --fmt` (`just fmt-check` to verify)
 just ep-fix         # apply Error Prone's suggested fixes in place
 just secrets        # betterleaks over the tree and the git history
+just release        # tag today's CalVer release (vYYYY.MM.DD) and push it
 ```
+
+Versions are CalVer, `YYYY.MM.DD` (`YYYY.MM.DD.N` for another release that day); local builds
+report `dev`. Pushing a `v20*` tag runs [`release.yml`](.github/workflows/release.yml): it builds
+the native binary on each OS, checks that `--version` matches the tag, and publishes the archives
+with a `SHA256SUMS` file and generated notes. Once the repository is public it also signs build
+provenance, which `gh attestation verify` and mise check.
 
 Every compile runs [Error Prone](https://errorprone.info) with Picnic's
 [error-prone-support](https://error-prone.picnic.tech) checks and Refaster rules, and

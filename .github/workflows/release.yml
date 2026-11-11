@@ -1,0 +1,86 @@
+name: Release
+
+# `just release` pushes a CalVer tag; this builds the native binaries and publishes them as a
+# GitHub release. Asset names carry the OS and architecture, so mise's github backend picks the
+# right one: `mise use -g github:tinnet/wowfam`.
+on:
+  push:
+    tags: ["v20*"] # vYYYY.MM.DD, or vYYYY.MM.DD.N for another release that day
+
+permissions: {}
+
+jobs:
+  native:
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: linux-x86_64 }
+          - { os: macos-latest, target: macos-aarch64 }
+          - { os: windows-latest, target: windows-x86_64 }
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: "25"
+          distribution: graalvm-community
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: jdx/mise-action@v5 # only gradle; the JDK comes from setup-graalvm
+        with:
+          install_args: gradle
+      - name: Build
+        shell: bash
+        run: gradle nativeCompile -PreleaseVersion="${VERSION#v}"
+      - name: Smoke test
+        shell: bash
+        run: |
+          out=$(build/native/nativeCompile/wowfam --version)
+          echo "$out"
+          [ "$out" = "wowfam ${VERSION#v}" ]
+      - name: Package (unix)
+        if: runner.os != 'Windows'
+        run: tar -czf "wowfam-${{ matrix.target }}.tar.gz" -C build/native/nativeCompile wowfam
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path build/native/nativeCompile/wowfam.exe -DestinationPath "wowfam-${{ matrix.target }}.zip"
+      - uses: actions/upload-artifact@v7
+        with:
+          path: wowfam-${{ matrix.target }}.*
+          archive: false # the .tar.gz / .zip as is; the artifact takes the file's name
+          if-no-files-found: error
+
+  release:
+    needs: native
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release
+      id-token: write # sign the attestation
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum wowfam-* | tee SHA256SUMS
+      # Signed build provenance, checked by `gh attestation verify` and by mise on install.
+      # GitHub only offers attestations for private repositories on Enterprise Cloud.
+      - if: ${{ !github.event.repository.private }}
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/wowfam-*
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: >
+          gh release create "$TAG" dist/*
+          --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes
+          --title "wowfam ${TAG#v}"
