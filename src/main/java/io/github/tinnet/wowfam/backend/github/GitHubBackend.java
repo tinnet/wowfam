@@ -8,12 +8,12 @@ import io.github.tinnet.wowfam.backend.BackendException;
 import io.github.tinnet.wowfam.backend.Release;
 import io.github.tinnet.wowfam.config.AddonSpec;
 import io.github.tinnet.wowfam.config.ConfigException;
+import io.github.tinnet.wowfam.util.Checksum;
 import io.github.tinnet.wowfam.util.Glob;
 import io.github.tinnet.wowfam.util.Version;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -34,7 +34,6 @@ public final class GitHubBackend implements Backend {
 
   public static final String ID = "github";
   private static final Pattern REPO = Pattern.compile("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+");
-  private static final String DIGEST_PREFIX = "sha256:";
 
   private final GitHubApi api;
 
@@ -106,9 +105,8 @@ public final class GitHubBackend implements Backend {
     return Version.parse(tag.substring(prefix.length()));
   }
 
-  private static Optional<String> sha256(Optional<String> digest) {
-    return digest
-        .filter(d -> d.regionMatches(true, 0, DIGEST_PREFIX, 0, DIGEST_PREFIX.length()))
-        .map(d -> d.substring(DIGEST_PREFIX.length()).toLowerCase(Locale.ROOT));
+  /** GitHub's {@code sha256:<hex>} digest; anything else is not something we can verify. */
+  private static Optional<Checksum> sha256(Optional<String> digest) {
+    return digest.flatMap(Checksum::parse).filter(c -> c.algorithm().equals(Checksum.SHA256));
   }
 }

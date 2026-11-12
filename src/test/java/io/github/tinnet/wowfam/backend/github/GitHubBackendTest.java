@@ -53,8 +53,11 @@ final class GitHubBackendTest {
     assertThat(releases).extracting(Release::tag).containsExactly("spoken/v3.8.5", "spoken/v3.8.4");
     assertThat(releases.getFirst().version()).isEqualTo(Version.of("3.8.5"));
     assertThat(releases.getFirst().asset().name()).isEqualTo("Spoken-3.8.5.zip");
-    assertThat(releases.getFirst().asset().sha256())
-        .hasValueSatisfying(s -> assertThat(s).hasSize(64));
+    assertThat(releases.getFirst().asset().checksum())
+        .hasValueSatisfying(c -> {
+          assertThat(c.algorithm()).isEqualTo("sha256");
+          assertThat(c.value()).hasSize(64);
+        });
   }
 
   @Test

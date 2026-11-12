@@ -1,11 +1,12 @@
 package io.github.tinnet.wowfam.backend;
 
+import io.github.tinnet.wowfam.util.Checksum;
 import java.net.URI;
 import java.util.Optional;
 
 /**
  * A downloadable archive of a release.
  *
- * @param sha256 lowercase hex digest, when the backend publishes one
+ * @param checksum the archive's digest, when the backend publishes one
  */
-public record Asset(String name, URI url, long size, Optional<String> sha256) {}
+public record Asset(String name, URI url, long size, Optional<Checksum> checksum) {}

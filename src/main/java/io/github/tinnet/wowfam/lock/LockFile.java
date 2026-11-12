@@ -2,6 +2,7 @@ package io.github.tinnet.wowfam.lock;
 
 import static java.util.Collections.unmodifiableMap;
 
+import io.github.tinnet.wowfam.util.Checksum;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,17 +27,26 @@ public final class LockFile {
   private final Path path;
   private final Map<String, LockEntry> entries;
 
-  private LockFile(Path path, Map<String, LockEntry> entries) {
+  /** Whether the text this was parsed from is in an older format than {@link #toToml} writes. */
+  private final boolean outdatedFormat;
+
+  private LockFile(Path path, Map<String, LockEntry> entries, boolean outdatedFormat) {
     this.path = path;
     this.entries = new TreeMap<>(entries);
+    this.outdatedFormat = outdatedFormat;
   }
 
+  /** Reads the lock file, rewriting it in the current format if it is in an older one. */
   public static LockFile read(Path path) {
     if (!Files.exists(path)) {
-      return new LockFile(path, Map.of());
+      return new LockFile(path, Map.of(), false);
     }
     try {
-      return parse(path, Files.readString(path));
+      var lock = parse(path, Files.readString(path));
+      if (lock.outdatedFormat) {
+        lock.write();
+      }
+      return lock;
     } catch (IOException e) {
       throw new IllegalStateException("cannot read " + path + ": " + e.getMessage(), e);
     }
@@ -51,10 +61,29 @@ public final class LockFile {
           "invalid lock file " + path + ": " + e.getOriginalMessage(), e);
     }
     var entries = new TreeMap<String, LockEntry>();
+    boolean outdatedFormat = false;
     for (var e : root.path("addons").properties()) {
       var n = e.getValue();
       var folders = new ArrayList<String>();
       n.path("folders").forEach(f -> folders.add(f.asString()));
+      Optional<Checksum> checksum = Optional.empty();
+      if (n.path("checksum").isString()) {
+        var text = n.path("checksum").asString();
+        checksum =
+            Optional.of(
+                Checksum.parse(text)
+                    .orElseThrow(() ->
+                        new IllegalStateException(
+                            "invalid lock file "
+                                + path
+                                + ": checksum of "
+                                + e.getKey()
+                                + " is not <algorithm>:<hex>")));
+      } else if (n.path("sha256").isString()) {
+        // Before the algorithm was recorded, the only digest was `sha256 = "<hex>"`.
+        checksum = Checksum.parse(Checksum.SHA256 + ":" + n.path("sha256").asString());
+        outdatedFormat = true;
+      }
       entries.put(
           e.getKey(),
           new LockEntry(
@@ -63,12 +92,10 @@ public final class LockFile {
               n.path("tag").asString(),
               n.path("asset").asString(),
               n.path("url").asString(),
-              n.path("sha256").isString()
-                  ? Optional.of(n.path("sha256").asString())
-                  : Optional.empty(),
+              checksum,
               folders));
     }
-    return new LockFile(path, entries);
+    return new LockFile(path, entries, outdatedFormat);
   }
 
   public Path path() {
@@ -111,7 +138,7 @@ public final class LockFile {
       line(sb, "tag", e.tag());
       line(sb, "asset", e.asset());
       line(sb, "url", e.url());
-      e.sha256().ifPresent(s -> line(sb, "sha256", s));
+      e.checksum().ifPresent(c -> line(sb, "checksum", c.toString()));
       sb.append("folders = [")
           .append(String.join(", ", e.folders().stream().map(LockFile::string).toList()))
           .append("]\n");

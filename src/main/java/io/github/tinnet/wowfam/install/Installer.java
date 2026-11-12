@@ -8,6 +8,7 @@ import io.github.tinnet.wowfam.config.Config;
 import io.github.tinnet.wowfam.config.Hooks;
 import io.github.tinnet.wowfam.lock.LockEntry;
 import io.github.tinnet.wowfam.lock.LockFile;
+import io.github.tinnet.wowfam.util.Checksum;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -179,7 +180,7 @@ public final class Installer {
             release.tag(),
             release.asset().name(),
             release.asset().url().toString(),
-            release.asset().sha256(),
+            release.asset().checksum(),
             folders));
     if (!hooks.postInstall().isEmpty()) {
       hookRunner.run(
@@ -226,7 +227,8 @@ public final class Installer {
   private Path fetch(Config config, AddonSpec spec, Release release) {
     var asset = release.asset();
     var target = config.settings().cacheDir().resolve(spec.name()).resolve(asset.name());
-    if (Files.exists(target) && asset.sha256().filter(s -> s.equals(sha256(target))).isPresent()) {
+    if (Files.exists(target)
+        && asset.checksum().filter(c -> c.equals(checksum(target, c.algorithm()))).isPresent()) {
       log.accept("using cached " + asset.name());
       return target;
     }
@@ -235,16 +237,12 @@ public final class Installer {
             + asset.name()
             + (asset.size() > 0 ? " (" + humanSize(asset.size()) + ")" : ""));
     backends.get(spec.source().backend()).download(asset, target);
-    if (asset.sha256().isPresent()) {
-      var actual = sha256(target);
-      if (!asset.sha256().orElseThrow().equals(actual)) {
+    if (asset.checksum().isPresent()) {
+      var expected = asset.checksum().orElseThrow();
+      var actual = checksum(target, expected.algorithm());
+      if (!expected.equals(actual)) {
         throw new InstallException(
-            "checksum mismatch for "
-                + asset.name()
-                + ": expected "
-                + asset.sha256().orElseThrow()
-                + ", got "
-                + actual);
+            "checksum mismatch for " + asset.name() + ": expected " + expected + ", got " + actual);
       }
     }
     return target;
@@ -328,14 +326,28 @@ public final class Installer {
     return missing;
   }
 
-  static String sha256(Path file) {
+  /** The digest of {@code file} by {@code algorithm}, one of sha256, sha1 and md5. */
+  static Checksum checksum(Path file, String algorithm) {
     try (InputStream in = Files.newInputStream(file)) {
-      var digest = MessageDigest.getInstance("SHA-256");
+      // Literal names, so native-image keeps each algorithm.
+      var digest =
+          switch (algorithm) {
+            case "sha256" -> MessageDigest.getInstance("SHA-256");
+            case "sha1" -> MessageDigest.getInstance("SHA-1");
+            case "md5" -> MessageDigest.getInstance("MD5");
+            default ->
+                throw new InstallException(
+                    "cannot verify "
+                        + file.getFileName()
+                        + ": unknown checksum algorithm '"
+                        + algorithm
+                        + "'");
+          };
       var buffer = new byte[64 * 1024];
       for (int n; (n = in.read(buffer)) > 0; ) {
         digest.update(buffer, 0, n);
       }
-      return HexFormat.of().formatHex(digest.digest());
+      return new Checksum(algorithm, HexFormat.of().formatHex(digest.digest()));
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     } catch (NoSuchAlgorithmException e) {

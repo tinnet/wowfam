@@ -128,8 +128,10 @@ folder untouched. Re-run with `--no-hooks` to install it anyway.
 
 ### wowfam.lock
 
-Written beside `wowfam.toml`. It records, per addon, the release tag, asset URL, SHA-256 (when
-GitHub publishes a digest) and the folders that were unpacked. `install` reuses the locked release
+Written beside `wowfam.toml`. It records, per addon, the release tag, asset URL, checksum (as
+`<algorithm>:<hex>`, e.g. `sha256:9f86…`, when the backend publishes a digest) and the folders that
+were unpacked. A lock file from before the algorithm was recorded (`sha256 = "<hex>"`) is rewritten
+in the current format the first time it is read. `install` reuses the locked release
 if it still satisfies `version`; `update` re-resolves. On update, folders the old release had and
 the new one does not are removed, and an addon may not overwrite a folder another addon owns.
 
