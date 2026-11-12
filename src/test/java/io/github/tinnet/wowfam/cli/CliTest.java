@@ -14,6 +14,8 @@ import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 /** End to end through the CLI, against a fake GitHub laid out like rusty-key/spoken-wow. */
@@ -201,6 +203,73 @@ final class CliTest {
     Files.delete(config);
     assertThat(run("list")).isEqualTo(1);
     assertThat(err.toString()).contains("no wowfam.toml found");
+  }
+
+  private void withHooks(String hooks) throws Exception {
+    Files.writeString(
+        config, Files.readString(config).replace("[addons.spoken]", hooks + "\n[addons.spoken]"));
+  }
+
+  @DisabledOnOs(OS.WINDOWS)
+  @Test
+  void hooksRunAroundTheInstallWithItsDetails() throws Exception {
+    withHooks(
+        """
+        [hooks]
+        pre_install = 'test -f "$WOWFAM_DIR/Spoken/Spoken.toc" && test ! -e "$WOWFAM_ADDONS_DIR/Spoken" && echo "pre $WOWFAM_ADDON $WOWFAM_VERSION $WOWFAM_TAG" >> hooks.log'
+        post_install = 'test -f "$WOWFAM_DIR/Spoken/Spoken.toc" && echo "post $WOWFAM_ADDON $(echo $WOWFAM_FOLDERS)" >> hooks.log'
+        """);
+
+    assertThat(run("install", "spoken")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString()).contains("running pre_install hook for spoken");
+    assertThat(tmp.resolve("hooks.log"))
+        .content()
+        .isEqualTo(
+            """
+            pre spoken 3.8.4 spoken/v3.8.4
+            post spoken Spoken SpokenContributions SpokenQuests Spoken_Quests Spoken_Readables
+            """);
+
+    // Nothing is copied when the addon is up to date, so no hooks run.
+    assertThat(run("install", "spoken")).isEqualTo(0);
+    assertThat(tmp.resolve("hooks.log")).content().hasLineCount(2);
+  }
+
+  @DisabledOnOs(OS.WINDOWS)
+  @Test
+  void aFailingPreInstallHookKeepsTheAddonOut() throws Exception {
+    withHooks(
+        """
+        [hooks]
+        pre_install = 'echo "rejected $WOWFAM_ADDON"; exit 3'
+        post_install = 'touch post-ran'
+        """);
+
+    assertThat(run("install")).isEqualTo(1);
+    assertThat(out.toString()).contains("rejected spoken");
+    assertThat(err.toString()).contains("pre_install hook for spoken failed with exit code 3");
+    assertThat(addons).isEmptyDirectory();
+    assertThat(tmp.resolve("post-ran")).doesNotExist();
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock")).get("spoken")).isEmpty();
+
+    assertThat(run("install", "--no-hooks")).as(err.toString()).isEqualTo(0);
+    assertThat(addons.resolve("Spoken")).isDirectory();
+    assertThat(tmp.resolve("post-ran")).doesNotExist();
+  }
+
+  @DisabledOnOs(OS.WINDOWS)
+  @Test
+  void aFailingPostInstallHookFailsTheRunButKeepsTheInstall() throws Exception {
+    withHooks(
+        """
+        [hooks]
+        post_install = 'exit 1'
+        """);
+
+    assertThat(run("install", "spoken")).isEqualTo(1);
+    assertThat(err.toString()).contains("post_install hook for spoken failed with exit code 1");
+    assertThat(addons.resolve("Spoken")).isDirectory();
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock")).get("spoken")).isPresent();
   }
 
   private int downloads() {

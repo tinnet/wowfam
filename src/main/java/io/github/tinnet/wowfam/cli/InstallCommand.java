@@ -32,11 +32,16 @@ final class InstallCommand implements Callable<Integer> {
       description = "Reinstall even if already installed.")
   boolean force;
 
+  @Option(
+      names = "--no-hooks",
+      description = "Skip the pre_install and post_install hooks of wowfam.toml.")
+  boolean noHooks;
+
   @Override
   public Integer call() {
     return Reports.print(
         spec,
-        new Installer(root.backends(), spec.commandLine().getOut()::println)
+        new Installer(root.backends(), spec.commandLine().getOut()::println, !noHooks)
             .run(root.loadConfig(), addons, Installer.Mode.INSTALL, force));
   }
 }

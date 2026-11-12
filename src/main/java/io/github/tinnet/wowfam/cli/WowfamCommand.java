@@ -106,6 +106,7 @@ public final class WowfamCommand implements Runnable {
     return new Config(
         loaded.file(),
         new Settings(addonsDir.toAbsolutePath().normalize(), loaded.settings().cacheDir()),
+        loaded.hooks(),
         loaded.addons());
   }
 

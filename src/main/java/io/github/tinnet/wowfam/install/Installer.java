@@ -5,6 +5,7 @@ import io.github.tinnet.wowfam.backend.Release;
 import io.github.tinnet.wowfam.backend.ReleaseSelector;
 import io.github.tinnet.wowfam.config.AddonSpec;
 import io.github.tinnet.wowfam.config.Config;
+import io.github.tinnet.wowfam.config.Hooks;
 import io.github.tinnet.wowfam.lock.LockEntry;
 import io.github.tinnet.wowfam.lock.LockFile;
 import java.io.IOException;
@@ -19,11 +20,13 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -63,10 +66,20 @@ public final class Installer {
 
   private final Backends backends;
   private final Consumer<String> log;
+  private final boolean runHooks;
 
   public Installer(Backends backends, Consumer<String> log) {
+    this(backends, log, true);
+  }
+
+  /**
+   * @param runHooks whether to run the {@code pre_install} and {@code post_install} hooks of the
+   *     config
+   */
+  public Installer(Backends backends, Consumer<String> log, boolean runHooks) {
     this.backends = backends;
     this.log = log;
+    this.runHooks = runHooks;
   }
 
   public Report run(Config config, List<String> names, Mode mode, boolean force) {
@@ -80,8 +93,12 @@ public final class Installer {
           "cannot create " + settings.addonsDir() + ": " + e.getMessage(), e);
     }
     for (var spec : config.installOrder(names)) {
-      outcomes.add(installOne(config, spec, lock, mode, force));
-      lock.write();
+      try {
+        outcomes.add(installOne(config, spec, lock, mode, force));
+      } finally {
+        // A failing post_install hook leaves the addon installed; the lock must say so.
+        lock.write();
+      }
     }
     return new Report(outcomes, missingDependencies(settings.addonsDir(), lock));
   }
@@ -125,13 +142,35 @@ public final class Installer {
     var archive = fetch(config, spec, release);
     log.accept(
         "installing " + spec.name() + " " + release.version() + " from " + release.asset().name());
+    var hooks = runHooks ? config.hooksFor(spec) : Hooks.NONE;
+    var configDir = config.file().toAbsolutePath().getParent();
+    var hookRunner =
+        new HookRunner(configDir == null ? Path.of("").toAbsolutePath() : configDir, log);
+    var previous = locked.map(LockEntry::version);
     var folders =
         unpack(
             archive,
             addonsDir,
             spec.name(),
             lock,
-            locked.map(LockEntry::folders).orElseGet(List::of));
+            locked.map(LockEntry::folders).orElseGet(List::of),
+            (staging, unpacked) -> {
+              if (!hooks.preInstall().isEmpty()) {
+                hookRunner.run(
+                    "pre_install",
+                    spec.name(),
+                    hooks.preInstall(),
+                    hookEnv(
+                        "pre_install",
+                        spec,
+                        release,
+                        previous,
+                        archive,
+                        addonsDir,
+                        staging,
+                        unpacked));
+              }
+            });
     lock.put(
         spec.name(),
         new LockEntry(
@@ -142,7 +181,13 @@ public final class Installer {
             release.asset().url().toString(),
             release.asset().sha256(),
             folders));
-    var previous = locked.map(LockEntry::version);
+    if (!hooks.postInstall().isEmpty()) {
+      hookRunner.run(
+          "post_install",
+          spec.name(),
+          hooks.postInstall(),
+          hookEnv("post_install", spec, release, previous, archive, addonsDir, addonsDir, folders));
+    }
     var status =
         previous
             .flatMap(io.github.tinnet.wowfam.util.Version::parse)
@@ -152,6 +197,30 @@ public final class Installer {
                     : p.compareTo(release.version()) > 0 ? Status.DOWNGRADED : Status.INSTALLED)
             .orElse(Status.INSTALLED);
     return new Outcome(spec.name(), status, previous, release.version().toString(), folders);
+  }
+
+  /** What a hook command learns about the installation, as environment variables. */
+  static Map<String, String> hookEnv(
+      String hook,
+      AddonSpec spec,
+      Release release,
+      Optional<String> previousVersion,
+      Path archive,
+      Path addonsDir,
+      Path dir,
+      List<String> folders) {
+    var env = new LinkedHashMap<String, String>();
+    env.put("WOWFAM_HOOK", hook);
+    env.put("WOWFAM_ADDON", spec.name());
+    env.put("WOWFAM_SOURCE", spec.source().toString());
+    env.put("WOWFAM_VERSION", release.version().toString());
+    env.put("WOWFAM_TAG", release.tag());
+    env.put("WOWFAM_PREVIOUS_VERSION", previousVersion.orElse(""));
+    env.put("WOWFAM_ARCHIVE", archive.toAbsolutePath().toString());
+    env.put("WOWFAM_ADDONS_DIR", addonsDir.toAbsolutePath().toString());
+    env.put("WOWFAM_DIR", dir.toAbsolutePath().toString());
+    env.put("WOWFAM_FOLDERS", String.join("\n", folders));
+    return env;
   }
 
   private Path fetch(Config config, AddonSpec spec, Release release) {
@@ -183,11 +252,17 @@ public final class Installer {
 
   /**
    * Extracts into a staging folder inside the AddOns directory (same file system, so moves are
-   * cheap), then swaps the folders in and removes folders the previous release had but this one
-   * does not.
+   * cheap), calls {@code beforeSwap} with the staging folder and the addon folders in it, then
+   * swaps the folders in and removes folders the previous release had but this one does not. If
+   * {@code beforeSwap} throws, the AddOns directory is left as it was.
    */
   private List<String> unpack(
-      Path archive, Path addonsDir, String addon, LockFile lock, List<String> previousFolders) {
+      Path archive,
+      Path addonsDir,
+      String addon,
+      LockFile lock,
+      List<String> previousFolders,
+      BiConsumer<Path, List<String>> beforeSwap) {
     var staging = addonsDir.resolve(".wowfam-staging-" + addon);
     try {
       deleteRecursively(staging);
@@ -204,6 +279,7 @@ public final class Installer {
                   + owner.orElseThrow());
         }
       }
+      beforeSwap.accept(staging, folders);
       var stale = new LinkedHashSet<>(previousFolders);
       stale.removeAll(folders);
       for (var folder : stale) {

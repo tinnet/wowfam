@@ -59,6 +59,73 @@ all of them are installed. [`examples/spoken/wowfam.toml`](examples/spoken/wowfa
 proof-of-concept target: Spoken publishes its player addon (six folders in one zip) and its sound
 packs from one repository under prefixed tags.
 
+### Hooks
+
+Shell commands to run around each addon's installation (`sh -c`, or `cmd /c` on Windows), from the
+directory holding `wowfam.toml`. Each is a command or a list of commands run in order. The
+`[hooks]` table applies to every addon; an addon's own `hooks` run after it.
+
+```toml
+[hooks]
+pre_install = "./review-addon.sh"        # before the folders are copied into the AddOns folder
+post_install = ["echo done", "notify-send wowfam \"$WOWFAM_ADDON $WOWFAM_VERSION\""]
+
+[addons.spoken]
+source = "github:rusty-key/spoken-wow"
+hooks = { post_install = "./reload-ui-reminder.sh" }
+```
+
+- **`pre_install`** runs once the release is unpacked into a staging folder and before anything in
+  the AddOns folder changes. If it exits non-zero, the addon is not installed and the run fails.
+  It is the place to inspect an addon before it reaches the game.
+- **`post_install`** runs once the folders are in place and recorded in `wowfam.lock`. If it
+  fails, the addon stays installed and the run fails.
+
+Hooks run only when an addon is actually installed or changed, not when it is up to date.
+`wowfam install --no-hooks` (or `update --no-hooks`) skips them. They see these variables:
+
+| Variable                  | Value                                                                  |
+|---------------------------|------------------------------------------------------------------------|
+| `WOWFAM_HOOK`             | `pre_install` or `post_install`                                        |
+| `WOWFAM_ADDON`            | the table name, e.g. `spoken`                                          |
+| `WOWFAM_SOURCE`           | e.g. `github:rusty-key/spoken-wow`                                     |
+| `WOWFAM_VERSION`, `WOWFAM_TAG` | the release being installed                                       |
+| `WOWFAM_PREVIOUS_VERSION` | the version it replaces, or empty                                      |
+| `WOWFAM_DIR`              | the folder holding the addon folders: staging for `pre_install`, the AddOns folder for `post_install` |
+| `WOWFAM_FOLDERS`          | the addon folders, one per line                                        |
+| `WOWFAM_ADDONS_DIR`       | the AddOns folder                                                      |
+| `WOWFAM_ARCHIVE`          | the downloaded zip                                                     |
+
+Hooks run with your permissions; only put commands you trust in `wowfam.toml`.
+
+#### Reviewing addons with Claude
+
+A `pre_install` hook can have [Claude Code](https://claude.com/claude-code) read every addon before
+it is installed and refuse the ones that look malicious:
+
+```toml
+[hooks]
+pre_install = "./review-addon.sh"
+```
+
+```sh
+#!/bin/sh
+# review-addon.sh: let Claude read the unpacked addon; install it only on an explicit OK.
+cd "$WOWFAM_DIR" || exit 1
+verdict=$(claude -p --allowedTools "Read,Grep,Glob" "You are reviewing the World of Warcraft \
+addon $WOWFAM_ADDON $WOWFAM_VERSION ($WOWFAM_SOURCE), unpacked in this directory, before it is \
+installed. Read its .toc, Lua and XML files. Look for unwanted behaviour: sending chat, whispers \
+or addon messages the user did not ask for, hidden or obfuscated code (loadstring, encoded \
+payloads), touching other addons' saved variables, protected-action abuse, or anything that does \
+not fit what the addon says it does. Summarise what you found, then end with a line that is \
+exactly VERDICT: OK or VERDICT: REJECT.")
+printf '%s\n' "$verdict"
+printf '%s\n' "$verdict" | tail -n 1 | grep -qx 'VERDICT: OK'
+```
+
+The review's output is printed as part of `wowfam install`; a rejected addon leaves the AddOns
+folder untouched. Re-run with `--no-hooks` to install it anyway.
+
 ### wowfam.lock
 
 Written beside `wowfam.toml`. It records, per addon, the release tag, asset URL, SHA-256 (when

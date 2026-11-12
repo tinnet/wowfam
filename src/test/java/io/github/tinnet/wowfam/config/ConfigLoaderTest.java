@@ -108,4 +108,56 @@ final class ConfigLoaderTest {
         .isInstanceOf(ConfigException.class)
         .hasMessageContaining("invalid TOML");
   }
+
+  @Test
+  void readsGlobalHooksThenTheAddonsOwn() {
+    var config =
+        loader.parse(
+            FILE,
+            """
+            [hooks]
+            pre_install = "./review.sh"
+            post_install = ["echo one", "echo two"]
+
+            [addons.spoken]
+            source = "github:rusty-key/spoken-wow"
+            hooks = { pre_install = "./spoken-only.sh" }
+
+            [addons.plain]
+            source = "github:someone/plain"
+            """);
+
+    assertThat(config.hooks())
+        .isEqualTo(new Hooks(List.of("./review.sh"), List.of("echo one", "echo two")));
+    var spoken = config.addons().get("spoken");
+    assertThat(spoken).isNotNull();
+    assertThat(spoken.options()).isEmpty();
+    assertThat(config.hooksFor(spoken))
+        .isEqualTo(
+            new Hooks(List.of("./review.sh", "./spoken-only.sh"), List.of("echo one", "echo two")));
+    var plain = config.addons().get("plain");
+    assertThat(plain).isNotNull();
+    assertThat(config.hooksFor(plain)).isEqualTo(config.hooks());
+  }
+
+  @Test
+  void noHooksByDefault() {
+    var config = loader.parse(FILE, "[addons.a]\nsource = \"github:o/r\"\n");
+    assertThat(config.hooks()).isEqualTo(Hooks.NONE);
+    assertThat(config.addons().get("a")).extracting(AddonSpec::hooks).isEqualTo(Hooks.NONE);
+  }
+
+  @Test
+  void rejectsUnknownHooks() {
+    assertThatThrownBy(() -> loader.parse(FILE, "[hooks]\nbefore_install = \"x\"\n"))
+        .isInstanceOf(ConfigException.class)
+        .hasMessageContaining("unknown hook hooks.before_install");
+  }
+
+  @Test
+  void rejectsHooksThatAreNotCommands() {
+    assertThatThrownBy(() -> loader.parse(FILE, "[hooks]\npre_install = 3\n"))
+        .isInstanceOf(ConfigException.class)
+        .hasMessageContaining("hooks.pre_install must be a command or a list of commands");
+  }
 }

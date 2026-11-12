@@ -13,9 +13,15 @@ import java.util.Optional;
  * @param depends other entries of the same file to install first
  * @param options remaining keys, interpreted by the backend (e.g. {@code tag_prefix}, {@code
  *     asset})
+ * @param hooks commands run around this addon's installation, after the global ones
  */
 public record AddonSpec(
-    String name, Source source, String version, List<String> depends, Map<String, String> options) {
+    String name,
+    Source source,
+    String version,
+    List<String> depends,
+    Map<String, String> options,
+    Hooks hooks) {
 
   public static final String LATEST = "latest";
 
@@ -25,6 +31,15 @@ public record AddonSpec(
     if (version == null || version.isBlank()) {
       version = LATEST;
     }
+  }
+
+  public AddonSpec(
+      String name,
+      Source source,
+      String version,
+      List<String> depends,
+      Map<String, String> options) {
+    this(name, source, version, depends, options, Hooks.NONE);
   }
 
   public Optional<String> option(String key) {

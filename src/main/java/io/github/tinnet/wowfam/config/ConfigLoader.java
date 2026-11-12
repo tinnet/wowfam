@@ -6,6 +6,7 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import tools.jackson.core.JacksonException;
@@ -24,6 +25,9 @@ import tools.jackson.dataformat.toml.TomlMapper;
  * version = "latest"
  * tag_prefix = "spoken/"
  * asset = "Spoken-*.zip"
+ *
+ * [hooks]
+ * pre_install = "./review-addon.sh"
  * }</pre>
  *
  * Relative paths are resolved against the directory holding the file; a leading {@code ~} is the
@@ -31,7 +35,8 @@ import tools.jackson.dataformat.toml.TomlMapper;
  */
 public final class ConfigLoader {
 
-  private static final Set<String> COMMON_KEYS = Set.of("source", "version", "depends");
+  private static final Set<String> COMMON_KEYS = Set.of("source", "version", "depends", "hooks");
+  private static final List<String> HOOK_KEYS = List.of("pre_install", "post_install");
   private static final TomlMapper TOML = TomlMapper.builder().build();
 
   private final Map<String, String> env;
@@ -72,6 +77,7 @@ public final class ConfigLoader {
     }
     var base = file.getParent() == null ? Path.of("").toAbsolutePath() : file.getParent();
     var settings = settings(root.path("settings"), base);
+    var hooks = hooks("hooks", root.path("hooks"));
     var addons = new LinkedHashMap<String, AddonSpec>();
     var addonsNode = root.path("addons");
     if (!addonsNode.isMissingNode() && !addonsNode.isObject()) {
@@ -93,7 +99,7 @@ public final class ConfigLoader {
         }
       }
     }
-    return new Config(file, settings, addons);
+    return new Config(file, settings, hooks, addons);
   }
 
   private Settings settings(JsonNode node, Path base) {
@@ -137,7 +143,53 @@ public final class ConfigLoader {
         options.put(entry.getKey(), scalar(name, entry.getKey(), entry.getValue()));
       }
     }
-    return new AddonSpec(name, source, version, depends, options);
+    var hooks = hooks("addons." + name + ".hooks", node.path("hooks"));
+    return new AddonSpec(name, source, version, depends, options, hooks);
+  }
+
+  private static Hooks hooks(String where, JsonNode node) {
+    if (node.isMissingNode()) {
+      return Hooks.NONE;
+    }
+    if (!node.isObject()) {
+      throw new ConfigException(where + " must be a table");
+    }
+    for (var entry : node.properties()) {
+      if (!HOOK_KEYS.contains(entry.getKey())) {
+        throw new ConfigException(
+            "unknown hook "
+                + where
+                + "."
+                + entry.getKey()
+                + " (expected "
+                + String.join(" or ", HOOK_KEYS)
+                + ")");
+      }
+    }
+    return new Hooks(
+        commands(where + ".pre_install", node.path("pre_install")),
+        commands(where + ".post_install", node.path("post_install")));
+  }
+
+  /** A command, or a list of commands run in order. */
+  private static List<String> commands(String where, JsonNode node) {
+    if (node.isMissingNode()) {
+      return List.of();
+    }
+    if (node.isString()) {
+      return List.of(node.asString());
+    }
+    if (node.isArray()) {
+      var commands = new ArrayList<String>();
+      for (var element : node) {
+        if (!element.isString()) {
+          throw new ConfigException(where + " must be a command or a list of commands");
+        }
+        commands.add(element.asString());
+      }
+      return commands;
+    }
+    throw new ConfigException(where + " must be a command or a list of commands");
   }
 
   private static String scalar(String addon, String key, JsonNode value) {
