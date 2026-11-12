@@ -47,6 +47,7 @@ version = "latest"                       # "latest", exact "3.8.5", or a prefix 
 tag_prefix = "spoken/"                   # github: only tags starting with this (monorepos)
 asset = "Spoken-*.zip"                   # github: glob for the release asset (default "*.zip")
 # prerelease = true                      # github: consider prereleases
+# flavor = "classic_era"                 # github: pick the zip for this game flavor (see below)
 
 [addons.spoken-bosses-audio]
 source = "github:rusty-key/spoken-wow"
@@ -58,6 +59,26 @@ The table name (`spoken`) is only a handle; a release zip may contain several ad
 all of them are installed. [`examples/spoken/wowfam.toml`](examples/spoken/wowfam.toml) is the
 proof-of-concept target: Spoken publishes its player addon (six folders in one zip) and its sound
 packs from one repository under prefixed tags.
+
+### Game flavors
+
+Addons built with the [BigWigs packager](https://github.com/BigWigsMods/packager) attach a
+`release.json` to each GitHub release, saying which zip is for which game flavor. Set `flavor` and
+wowfam reads it, so there is no `asset` glob to keep right:
+
+```toml
+[addons.bigwigs]
+source = "github:BigWigsMods/BigWigs"
+flavor = "classic_era"   # the packager's names: mainline, classic, bcc, wrath, cata, mists, ...
+# nolib = true           # take the -nolib zip instead of the one with libraries embedded
+```
+
+`retail` (for `mainline`), `classic_era` / `vanilla` (`classic`), `tbc` (`bcc`), `wotlk` (`wrath`),
+`cataclysm` (`cata`) and `mop` (`mists`) are understood too. A release whose `release.json` lists
+nothing for the flavor is passed over, so an addon that dropped your flavor stays on its last
+release that had it. If several zips are listed for the flavor, `asset` narrows them down.
+Releases without a `release.json` are picked by `asset` as usual, and without `flavor` the file is
+ignored.
 
 ### Hooks
 
@@ -194,8 +215,9 @@ no GraalVM release for JDK 26 or 27.
 | `util`      | versions (mise-style matching), globs, dependency ordering                            |
 | `nativeimage` | GraalVM substitutions; drops Jackson's unused XML/SQL handlers (−7 MB)              |
 
-Adding a backend means implementing `Backend` (list releases with their asset, download an asset)
-and registering it in `WowfamCommand.defaultBackends`.
+Adding a backend means implementing `Backend` (list releases with their asset, download an asset;
+optionally `resolve`, to pin down a release's asset only once that release is chosen) and
+registering it in `WowfamCommand.defaultBackends`.
 
 ## Tests
 

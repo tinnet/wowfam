@@ -10,6 +10,7 @@ import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -203,6 +204,70 @@ final class CliTest {
     Files.delete(config);
     assertThat(run("list")).isEqualTo(1);
     assertThat(err.toString()).contains("no wowfam.toml found");
+  }
+
+  @Test
+  void installsTheZipForTheConfiguredFlavorAndKeepsItLocked() throws Exception {
+    Files.writeString(
+        config,
+        """
+        [settings]
+        addons_dir = "Interface/AddOns"
+        cache_dir = "cache"
+
+        [addons.bars]
+        source = "github:someone/bars"
+        flavor = "classic_era"
+        """);
+    github.release(
+        "someone/bars",
+        "v1.0.0",
+        addonZip("Bars-v1.0.0.zip", "1.0.0-retail", Map.of("Bars", "")),
+        addonZip("Bars-v1.0.0-classic.zip", "1.0.0-classic", Map.of("Bars", "")),
+        FakeGitHub.releaseJson(
+            Map.of(
+                "Bars-v1.0.0.zip", List.of("mainline"),
+                "Bars-v1.0.0-classic.zip", List.of("classic"))));
+
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+    assertThat(addons.resolve("Bars/Bars.toc")).content().contains("## Version: 1.0.0-classic");
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock")).get("bars"))
+        .hasValueSatisfying(e -> {
+          assertThat(e.asset()).isEqualTo("Bars-v1.0.0-classic.zip");
+          assertThat(e.checksum()).isPresent();
+        });
+
+    // 2.0.0 dropped Classic: nothing to update to, and nothing reported as outdated.
+    github.release(
+        "someone/bars",
+        "v2.0.0",
+        addonZip("Bars-v2.0.0.zip", "2.0.0-retail", Map.of("Bars", "")),
+        FakeGitHub.releaseJson(Map.of("Bars-v2.0.0.zip", List.of("mainline"))));
+    assertThat(run("outdated")).isEqualTo(0);
+    assertThat(out.toString()).contains("all addons are up to date");
+    assertThat(run("update")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString()).contains("bars 1.0.0 is up to date");
+    assertThat(addons.resolve("Bars/Bars.toc")).content().contains("## Version: 1.0.0-classic");
+  }
+
+  @Test
+  void aFlavorNoReleaseHasFailsWithAMessage() throws Exception {
+    Files.writeString(
+        config,
+        """
+        [addons.bars]
+        source = "github:someone/bars"
+        flavor = "cata"
+        """);
+    github.release(
+        "someone/bars",
+        "v1.0.0",
+        addonZip("Bars-v1.0.0.zip", "1.0.0", Map.of("Bars", "")),
+        FakeGitHub.releaseJson(Map.of("Bars-v1.0.0.zip", List.of("mainline"))));
+
+    assertThat(run("install")).isEqualTo(1);
+    assertThat(err.toString())
+        .contains("no release of bars", "matches version 'latest' for flavor 'cata'");
   }
 
   private void withHooks(String hooks) throws Exception {

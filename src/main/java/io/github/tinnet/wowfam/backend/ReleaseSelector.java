@@ -2,6 +2,8 @@ package io.github.tinnet.wowfam.backend;
 
 import static java.util.Comparator.comparing;
 
+import io.github.tinnet.wowfam.config.AddonSpec;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -10,29 +12,35 @@ public final class ReleaseSelector {
 
   private ReleaseSelector() {}
 
-  /** The newest release satisfying {@code requested} ({@code latest}, exact or prefix). */
-  public static Optional<Release> newest(List<Release> releases, String requested) {
-    return releases.stream()
-        .filter(r -> r.version().satisfies(requested))
-        .max(comparing(Release::version));
+  /**
+   * The newest of {@code releases} that satisfies the addon's {@code version} ({@code latest},
+   * exact or prefix) and that the backend can {@linkplain Backend#resolve resolve}.
+   */
+  public static Optional<Release> newest(Backend backend, AddonSpec spec, List<Release> releases) {
+    return preferLocked(backend, spec, releases, Optional.empty());
   }
 
   /**
-   * The locked release if it is still offered and still satisfies {@code requested}; otherwise the
-   * newest that does.
+   * The locked release if it is still offered and still satisfies the addon's {@code version};
+   * otherwise the newest that does.
    */
   public static Optional<Release> preferLocked(
-      List<Release> releases, String requested, Optional<String> lockedTag) {
+      Backend backend, AddonSpec spec, List<Release> releases, Optional<String> lockedTag) {
+    var candidates = new ArrayList<Release>();
+    releases.stream()
+        .filter(r -> r.version().satisfies(spec.version()))
+        .sorted(comparing(Release::version).reversed())
+        .forEach(candidates::add);
     if (lockedTag.isPresent()) {
-      var locked =
-          releases.stream()
-              .filter(
-                  r -> r.tag().equals(lockedTag.orElseThrow()) && r.version().satisfies(requested))
-              .findFirst();
-      if (locked.isPresent()) {
-        return locked;
+      // Stable, so the locked release moves to the front and the rest stay newest first.
+      candidates.sort(comparing(r -> !r.tag().equals(lockedTag.orElseThrow())));
+    }
+    for (var candidate : candidates) {
+      var resolved = backend.resolve(spec, candidate);
+      if (resolved.isPresent()) {
+        return resolved;
       }
     }
-    return newest(releases, requested);
+    return Optional.empty();
   }
 }

@@ -112,7 +112,7 @@ public final class Installer {
     var releases = backend.releases(spec);
     var lockedTag = mode == Mode.INSTALL ? locked.map(LockEntry::tag) : Optional.<String>empty();
     var release =
-        ReleaseSelector.preferLocked(releases, spec.version(), lockedTag)
+        ReleaseSelector.preferLocked(backend, spec, releases, lockedTag)
             .orElseThrow(() ->
                 new InstallException(
                     "no release of "
@@ -122,6 +122,7 @@ public final class Installer {
                         + ") matches version '"
                         + spec.version()
                         + "'"
+                        + spec.option("flavor").map(f -> " for flavor '" + f + "'").orElse("")
                         + (releases.isEmpty()
                             ? "; none found at all, check tag_prefix and asset"
                             : "")));

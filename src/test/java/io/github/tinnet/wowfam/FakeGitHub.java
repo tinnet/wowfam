@@ -117,6 +117,31 @@ public final class FakeGitHub implements AutoCloseable {
     return zip(name, entries);
   }
 
+  /**
+   * A {@code release.json} as the BigWigs packager writes it: {@code filename -> flavors}; a
+   * filename containing {@code nolib} is marked as such.
+   */
+  public static FakeAsset releaseJson(Map<String, List<String>> filesToFlavors) {
+    var releases = new ArrayList<Map<String, Object>>();
+    filesToFlavors.forEach((filename, flavors) ->
+        releases.add(
+            Map.of(
+                "name",
+                "Addon",
+                "version",
+                "v1",
+                "filename",
+                filename,
+                "nolib",
+                filename.contains("nolib"),
+                "metadata",
+                flavors.stream()
+                    .map(f -> Map.<String, Object>of("flavor", f, "interface", 11508))
+                    .toList())));
+    var json = JsonMapper.builder().build().writeValueAsString(Map.of("releases", releases));
+    return new FakeAsset("release.json", json.getBytes(UTF_8));
+  }
+
   private void handle(HttpExchange exchange) throws IOException {
     var path = exchange.getRequestURI().getPath();
     requests.add(exchange.getRequestMethod() + " " + exchange.getRequestURI());

@@ -1,6 +1,8 @@
 package io.github.tinnet.wowfam.backend.github;
 
 import static io.github.tinnet.wowfam.FakeGitHub.addonZip;
+import static io.github.tinnet.wowfam.FakeGitHub.releaseJson;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -11,11 +13,14 @@ import io.github.tinnet.wowfam.FakeGitHub;
 import io.github.tinnet.wowfam.FakeGitHub.FakeRelease;
 import io.github.tinnet.wowfam.backend.BackendException;
 import io.github.tinnet.wowfam.backend.Release;
+import io.github.tinnet.wowfam.backend.ReleaseSelector;
 import io.github.tinnet.wowfam.config.AddonSpec;
 import io.github.tinnet.wowfam.config.Source;
 import io.github.tinnet.wowfam.util.Version;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -35,6 +40,168 @@ final class GitHubBackendTest {
 
   private List<Release> releases(Map<String, String> options) {
     return github.backends().get("github").releases(spec(options));
+  }
+
+  /** What would be installed: the newest release the backend can resolve. */
+  private Optional<Release> newest(Map<String, String> options) {
+    var backend = github.backends().get("github");
+    var spec = spec(options);
+    return ReleaseSelector.newest(backend, spec, backend.releases(spec));
+  }
+
+  private static FakeGitHub.FakeAsset zip(String name) {
+    return addonZip(name, "1", Map.of("Addon", ""));
+  }
+
+  private long releaseJsonDownloads() {
+    return github.requests().stream().filter(r -> r.endsWith("/release.json")).count();
+  }
+
+  @Test
+  void picksTheZipReleaseJsonListsForTheFlavor() {
+    github.release(
+        "o/addon",
+        "v2.0.0",
+        zip("Addon-v2.0.0.zip"),
+        zip("Addon-v2.0.0-classic.zip"),
+        zip("Addon-v2.0.0-nolib.zip"),
+        releaseJson(
+            Map.of(
+                "Addon-v2.0.0.zip", List.of("mainline"),
+                "Addon-v2.0.0-nolib.zip", List.of("mainline"),
+                "Addon-v2.0.0-classic.zip", List.of("classic", "bcc"))));
+    var backend = github.backends().get("github");
+    Function<Map<String, String>, String> picked =
+        options -> {
+          var spec =
+              new AddonSpec("a", Source.parse("github:o/addon"), "latest", List.of(), options);
+          return ReleaseSelector.newest(backend, spec, backend.releases(spec))
+              .map(r -> r.asset().name())
+              .orElse("(none)");
+        };
+
+    assertThat(picked.apply(Map.of("flavor", "classic"))).isEqualTo("Addon-v2.0.0-classic.zip");
+    assertThat(picked.apply(Map.of("flavor", "Classic_Era"))).isEqualTo("Addon-v2.0.0-classic.zip");
+    assertThat(picked.apply(Map.of("flavor", "tbc"))).isEqualTo("Addon-v2.0.0-classic.zip");
+    assertThat(picked.apply(Map.of("flavor", "retail"))).isEqualTo("Addon-v2.0.0.zip");
+    assertThat(picked.apply(Map.of("flavor", "mainline", "nolib", "true")))
+        .isEqualTo("Addon-v2.0.0-nolib.zip");
+    assertThat(picked.apply(Map.of("flavor", "cata"))).isEqualTo("(none)");
+    // One listing serves them all.
+    assertThat(github.requests()).filteredOn(r -> r.contains("/repos/")).hasSize(1);
+  }
+
+  @Test
+  void theZipForAFlavorCarriesItsOwnChecksum() {
+    github.release(
+        "o/addon",
+        "v2.0.0",
+        zip("Addon-v2.0.0.zip"),
+        releaseJson(Map.of("Addon-v2.0.0.zip", List.of("mainline", "classic"))));
+    var backend = github.backends().get("github");
+    var spec =
+        new AddonSpec(
+            "a", Source.parse("github:o/addon"), "latest", List.of(), Map.of("flavor", "classic"));
+
+    var listed = backend.releases(spec);
+    assertThat(listed).extracting(r -> r.asset().name()).containsExactly("release.json");
+    assertThat(releaseJsonDownloads()).isEqualTo(0);
+
+    var release = ReleaseSelector.newest(backend, spec, listed).orElseThrow();
+    assertThat(release.asset().name()).isEqualTo("Addon-v2.0.0.zip");
+    assertThat(release.asset().url().toString()).endsWith("/download/v2.0.0/Addon-v2.0.0.zip");
+    assertThat(release.asset().checksum()).isPresent();
+  }
+
+  @Test
+  void fallsBackToTheNewestReleaseThatHasTheFlavor() {
+    github
+        .release(
+            REPO,
+            "v1.0.0",
+            zip("Addon-v1.0.0.zip"),
+            releaseJson(Map.of("Addon-v1.0.0.zip", List.of("mainline", "classic"))))
+        .release(
+            REPO,
+            "v1.1.0",
+            zip("Addon-v1.1.0.zip"),
+            releaseJson(Map.of("Addon-v1.1.0.zip", List.of("mainline", "classic"))))
+        .release(
+            REPO,
+            "v2.0.0",
+            zip("Addon-v2.0.0.zip"),
+            releaseJson(Map.of("Addon-v2.0.0.zip", List.of("mainline"))));
+
+    assertThat(newest(Map.of("flavor", "classic")))
+        .hasValueSatisfying(r -> assertThat(r.tag()).isEqualTo("v1.1.0"));
+    // Only the releases tried were looked into: 2.0.0, then 1.1.0, never 1.0.0.
+    assertThat(releaseJsonDownloads()).isEqualTo(2);
+    assertThat(newest(Map.of("flavor", "mainline")))
+        .hasValueSatisfying(r -> assertThat(r.tag()).isEqualTo("v2.0.0"));
+  }
+
+  @Test
+  void releasesWithoutReleaseJsonAreStillPickedByAsset() {
+    github
+        .release(REPO, "v1.0.0", zip("Addon-v1.0.0.zip"))
+        .release(
+            REPO,
+            "v2.0.0",
+            zip("Addon-v2.0.0.zip"),
+            releaseJson(Map.of("Addon-v2.0.0.zip", List.of("mainline"))));
+
+    assertThat(newest(Map.of("flavor", "classic")))
+        .hasValueSatisfying(r -> {
+          assertThat(r.tag()).isEqualTo("v1.0.0");
+          assertThat(r.asset().name()).isEqualTo("Addon-v1.0.0.zip");
+        });
+  }
+
+  @Test
+  void releaseJsonIsIgnoredWithoutAFlavor() {
+    github.release(
+        REPO,
+        "v2.0.0",
+        zip("Addon-v2.0.0.zip"),
+        releaseJson(Map.of("Addon-v2.0.0.zip", List.of("mainline"))));
+
+    assertThat(newest(Map.of()))
+        .hasValueSatisfying(r -> assertThat(r.asset().name()).isEqualTo("Addon-v2.0.0.zip"));
+    assertThat(releaseJsonDownloads()).isEqualTo(0);
+  }
+
+  @Test
+  void assetNarrowsDownSeveralZipsForOneFlavor() {
+    github.release(
+        REPO,
+        "v2.0.0",
+        zip("Addon-v2.0.0.zip"),
+        zip("Addon_Options-v2.0.0.zip"),
+        releaseJson(
+            Map.of(
+                "Addon-v2.0.0.zip", List.of("classic"),
+                "Addon_Options-v2.0.0.zip", List.of("classic"))));
+
+    assertThatThrownBy(() -> newest(Map.of("flavor", "classic")))
+        .isInstanceOf(BackendException.class)
+        .hasMessageContaining("for flavor 'classic'")
+        .hasMessageContaining("narrow it down with 'asset'");
+    assertThat(newest(Map.of("flavor", "classic", "asset", "Addon_Options-*.zip")))
+        .hasValueSatisfying(
+            r -> assertThat(r.asset().name()).isEqualTo("Addon_Options-v2.0.0.zip"));
+  }
+
+  @Test
+  void rejectsAReleaseJsonThatIsNotJson() {
+    github.release(
+        REPO,
+        "v2.0.0",
+        zip("Addon-v2.0.0.zip"),
+        new FakeGitHub.FakeAsset("release.json", "<html>".getBytes(UTF_8)));
+
+    assertThatThrownBy(() -> newest(Map.of("flavor", "classic")))
+        .isInstanceOf(BackendException.class)
+        .hasMessageContaining("invalid release.json in v2.0.0");
   }
 
   @Test

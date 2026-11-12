@@ -62,6 +62,15 @@ public final class GitHubApi {
     return result;
   }
 
+  /** The body of a small text asset, such as a release's {@code release.json}. */
+  public String text(URI url) {
+    var response = send(get(url).build(), HttpResponse.BodyHandlers.ofString());
+    if (response.statusCode() / 100 != 2) {
+      throw new BackendException("download of " + url + " failed: HTTP " + response.statusCode());
+    }
+    return response.body();
+  }
+
   public void download(URI url, Path target) {
     var response =
         send(

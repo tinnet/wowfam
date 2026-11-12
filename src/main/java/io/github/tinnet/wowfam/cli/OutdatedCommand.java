@@ -28,9 +28,8 @@ final class OutdatedCommand implements Callable<Integer> {
     var out = spec.commandLine().getOut();
     int outdated = 0;
     for (var addon : config.addons().values()) {
-      var newest =
-          ReleaseSelector.newest(
-              backends.get(addon.source().backend()).releases(addon), addon.version());
+      var backend = backends.get(addon.source().backend());
+      var newest = ReleaseSelector.newest(backend, addon, backend.releases(addon));
       if (newest.isEmpty()) {
         continue;
       }
