@@ -4,6 +4,8 @@ import static io.github.tinnet.wowfam.FakeGitHub.addonZip;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.tinnet.wowfam.FakeGitHub;
+import io.github.tinnet.wowfam.config.ConfigLoader;
+import io.github.tinnet.wowfam.config.Source;
 import io.github.tinnet.wowfam.lock.LockFile;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -339,5 +341,101 @@ final class CliTest {
 
   private int downloads() {
     return (int) github.requests().stream().filter(r -> r.contains("/download/")).count();
+  }
+
+  @Test
+  void addWorksOutTheEntryAppendsItAndInstalls() throws Exception {
+    var before = Files.readString(config);
+    github
+        .release(
+            "fitzforge/polestar",
+            "client-v0.1.7",
+            new FakeGitHub.FakeAsset("Polestar.Client.dmg", new byte[1]))
+        .release(
+            "fitzforge/polestar",
+            "v0.3.7",
+            addonZip("Polestar-0.3.7.zip", "0.3.7", Map.of("Polestar", "", "Polestar_Codex", "")),
+            addonZip("Polestar_Recorder-0.3.7.zip", "0.3.7", Map.of("Polestar_Recorder", "")));
+    Files.createDirectories(addons.resolve("Polestar"));
+
+    assertThat(run("add", "--dry-run", "https://github.com/fitzforge/polestar")).isEqualTo(0);
+    assertThat(out.toString()).contains("asset = \"Polestar-*.zip\"", "would install 0.3.7");
+    assertThat(config).content().isEqualTo(before);
+
+    assertThat(run("add", "https://github.com/fitzforge/polestar")).as(err.toString()).isEqualTo(0);
+    var table =
+        """
+        [addons.polestar]
+        source = "github:fitzforge/polestar"
+        version = "latest"
+        asset = "Polestar-*.zip"
+        """;
+    assertThat(config).content().isEqualTo("%s\n%s", before, table);
+    assertThat(out.toString())
+        .contains(table, "✓ polestar 0.3.7  (Polestar, Polestar_Codex)")
+        .contains("Polestar was already in AddOns; wowfam manages it now")
+        .doesNotContain("Polestar_Codex was already");
+    assertThat(addons.resolve("Polestar/Polestar.toc")).exists();
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock")).get("polestar")).isPresent();
+
+    assertThat(run("add", "fitzforge/polestar", "--name", "again")).isEqualTo(1);
+    assertThat(err.toString())
+        .contains("github:fitzforge/polestar is already in", "as addons.polestar");
+    assertThat(run("add", "fitzforge/polestar")).isEqualTo(1);
+    assertThat(err.toString()).contains("github:fitzforge/polestar is already in");
+    assertThat(run("add", "o/other", "--name", "polestar")).isEqualTo(1);
+    assertThat(err.toString()).contains("addons.polestar is already in", "pick another --name");
+  }
+
+  @Test
+  void addTakesTheUsersOptionsAndCanSkipTheInstall() throws Exception {
+    github.release(
+        REPO,
+        "bosses-audio/v2.1.0",
+        addonZip("SpokenBossesAudio-2.1.0.zip", "2.1.0", Map.of("SpokenBossesAudio", "")));
+    assertThat(run("add", REPO, "--tag-prefix", "readables-audio/")).isEqualTo(1);
+    assertThat(err.toString()).contains("already in", "as addons.spoken-readables-audio");
+
+    assertThat(
+            run(
+                "add",
+                "github:rusty-key/spoken-wow",
+                "--name",
+                "audio",
+                "--tag-prefix",
+                "bosses-audio/",
+                "--version",
+                "2",
+                "--no-install"))
+        .as(err.toString())
+        .isEqualTo(0);
+    var audio = new ConfigLoader(Map.of(), tmp).load(config).addons().get("audio");
+    assertThat(audio).isNotNull();
+    assertThat(audio.version()).isEqualTo("2");
+    assertThat(audio.options())
+        .containsEntry("tag_prefix", "bosses-audio/")
+        .containsEntry("asset", "SpokenBossesAudio-*.zip");
+    assertThat(addons).doesNotExist();
+  }
+
+  @Test
+  void addTakesTheEntryOutAgainWhenTheInstallFails() throws Exception {
+    withHooks("[hooks]\npre_install = 'exit 3'");
+    var before = Files.readString(config);
+    github.release("o/thing", "v1.0", addonZip("Thing-1.0.zip", "1.0", Map.of("Thing", "")));
+
+    assertThat(run("add", "o/thing")).isEqualTo(1);
+    assertThat(err.toString())
+        .contains("not installed, so not added to", "pre_install hook for thing failed");
+    assertThat(config).content().isEqualTo(before);
+  }
+
+  @Test
+  void addNamesTheEntryAfterTheRepository() {
+    assertThat(AddCommand.defaultName(Source.parse("github:mooreatv/BetterVendorPrice")))
+        .isEqualTo("better-vendor-price");
+    assertThat(AddCommand.defaultName(Source.parse("github:rusty-key/spoken-wow")))
+        .isEqualTo("spoken-wow");
+    assertThat(AddCommand.defaultName(Source.parse("github:o/Questie_2"))).isEqualTo("questie-2");
   }
 }

@@ -21,6 +21,16 @@ public interface Backend {
   List<Release> releases(AddonSpec spec);
 
   /**
+   * Fills in the options a new addon from {@code spec.source()} needs, for {@code wowfam add}: what
+   * the user gave stays, the rest is worked out from what the source publishes.
+   *
+   * @throws BackendException when it cannot decide on its own, saying which option to set
+   */
+  default AddonSpec discover(AddonSpec spec) {
+    return spec;
+  }
+
+  /**
    * Settles a release picked from {@link #releases} before it is installed or reported. A backend
    * that needs another request to know which asset a release offers this addon (GitHub with {@code
    * flavor}) makes it here, for the one release that matters, not for every release it lists.

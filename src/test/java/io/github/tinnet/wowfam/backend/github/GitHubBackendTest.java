@@ -326,4 +326,101 @@ final class GitHubBackendTest {
     assertThat(GitHubBackend.versionOf(prefix + v + version, prefix)).hasValue(Version.of(version));
     assertThat(GitHubBackend.versionOf("other/" + v + version, prefix)).isEmpty();
   }
+
+  private Map<String, String> discover(String repo, Map<String, String> given) {
+    var spec = new AddonSpec("x", Source.parse("github:" + repo), "latest", List.of(), given);
+    return github.backends().get("github").discover(spec).options();
+  }
+
+  @Test
+  void discoversTheAddonsTagPrefixInAMonorepoWithACompanionApp() {
+    github
+        .release(REPO, "manager/v0.1.13", zip("Spoken-Manager-0.1.13-mac-arm64.zip"))
+        .release(REPO, "spoken/v3.8.7", zip("Spoken-3.8.7.zip"))
+        .release(REPO, "manager/v0.1.14", zip("Spoken-Manager-0.1.14-mac-arm64.zip"));
+
+    assertThat(discover(REPO, Map.of()))
+        .containsExactlyInAnyOrderEntriesOf(
+            Map.of("tag_prefix", "spoken/", "asset", "Spoken-*.zip"));
+  }
+
+  @Test
+  void discoversTheZipNamedLikeTheRepositoryAndSkipsTagsWithoutZips() {
+    var repo = "fitzforge/polestar";
+    github
+        .release(repo, "forge-v0.2.0", zip("polestar-forge-windows-x86_64.zip"))
+        .release(
+            repo, "client-v0.1.7", new FakeGitHub.FakeAsset("Polestar.Client.dmg", new byte[1]))
+        .release(
+            repo, "v0.3.7.2", zip("Polestar-0.3.7.2.zip"), zip("Polestar_Recorder-0.3.7.2.zip"));
+
+    assertThat(discover(repo, Map.of())).containsExactly(Map.entry("asset", "Polestar-*.zip"));
+  }
+
+  @Test
+  void discoversTheNewerTagSchemeWhenBothAreNamedLikeTheRepository() {
+    var repo = "Questie/Questie";
+    github
+        .release(repo, "v11.38.0", zip("Questie-v11.38.0.zip"))
+        .release(repo, "bundle/v12.8.0+v1.0.16", zip("Questie-v12.8.0+v1.0.16.zip"));
+
+    assertThat(discover(repo, Map.of()))
+        .containsExactlyInAnyOrderEntriesOf(
+            Map.of("tag_prefix", "bundle/", "asset", "Questie-*.zip"));
+  }
+
+  @Test
+  void keepsWhatTheUserGaveAndNeedsNoAssetForAFlavor() {
+    github
+        .release(REPO, "other/v1.0.0", zip("Other-1.0.0.zip"))
+        .release(
+            REPO,
+            "spoken/v3.8.7",
+            zip("Spoken-3.8.7.zip"),
+            zip("Spoken-3.8.7-classic.zip"),
+            releaseJson(Map.of("Spoken-3.8.7-classic.zip", List.of("classic"))));
+
+    assertThat(discover(REPO, Map.of("tag_prefix", "other/", "asset", "O*.zip")))
+        .containsExactlyInAnyOrderEntriesOf(Map.of("tag_prefix", "other/", "asset", "O*.zip"));
+    assertThat(discover(REPO, Map.of("tag_prefix", "spoken/", "flavor", "classic_era")))
+        .doesNotContainKey("asset");
+  }
+
+  @Test
+  void asksWhenItCannotTellWhichZipOrPrefixIsTheAddon() {
+    github.release(
+        REPO,
+        "spoken/v3.8.7",
+        zip("Voices-3.8.7.zip"),
+        zip("Sounds-3.8.7.zip"),
+        releaseJson(Map.of("Voices-3.8.7.zip", List.of("classic"))));
+    assertThatThrownBy(() -> discover(REPO, Map.of()))
+        .isInstanceOf(BackendException.class)
+        .hasMessageContaining("Voices-3.8.7.zip, Sounds-3.8.7.zip")
+        .hasMessageContaining("set asset")
+        .hasMessageContaining("or flavor");
+
+    var repo = "someone/addons";
+    github
+        .release(repo, "alpha/v1.0.0", zip("Alpha-1.0.0.zip"))
+        .release(repo, "beta/v2.0.0", zip("Beta-2.0.0.zip"));
+    assertThatThrownBy(() -> discover(repo, Map.of()))
+        .isInstanceOf(BackendException.class)
+        .hasMessageContaining("'beta/', e.g. beta/v2.0.0; 'alpha/', e.g. alpha/v1.0.0")
+        .hasMessageContaining("set tag_prefix");
+  }
+
+  @HegelTest
+  void anAssetPatternIsTheZipNameWithItsVersionStarred(TestCase tc) {
+    var prefix = tc.draw(Generators.sampledFrom("", "spoken/", "bundle/", "release-"), "prefix");
+    var version = tc.draw(Generators.fromRegex("[0-9]{1,3}(\\.[0-9]{1,3}){0,3}"), "version");
+    var v = tc.draw(Generators.booleans(), "v in tag") ? "v" : "";
+    var vInName = tc.draw(Generators.booleans(), "v in name") ? v : "";
+    var name = tc.draw(Generators.fromRegex("[A-Z][A-Za-z_]{0,12}"), "name");
+    var tag = prefix + v + version;
+
+    assertThat(GitHubBackend.prefixOf(tag)).isEqualTo(prefix);
+    assertThat(GitHubBackend.withoutVersion(name + "-" + vInName + version + ".zip", v + version))
+        .isEqualTo("%s-*.zip", name);
+  }
 }

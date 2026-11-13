@@ -1,6 +1,7 @@
 package io.github.tinnet.wowfam.backend.github;
 
 import static java.util.Comparator.comparing;
+import static java.util.stream.Collectors.joining;
 
 import io.github.tinnet.wowfam.backend.Asset;
 import io.github.tinnet.wowfam.backend.Backend;
@@ -14,6 +15,7 @@ import io.github.tinnet.wowfam.util.Version;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -126,6 +128,194 @@ public final class GitHubBackend implements Backend {
     }
     result.sort(comparing(Release::version).reversed());
     return result;
+  }
+
+  /**
+   * Works out {@code tag_prefix} and {@code asset} from the repository's releases, as one would by
+   * looking at its release page:
+   *
+   * <ul>
+   *   <li>Tags are grouped by what comes before their version ({@code spoken/v3.8.7} is in {@code
+   *       spoken/}). Groups whose releases carry no zip are dropped, which leaves out desktop apps
+   *       published from the same repository. If several remain, the one named in the repository
+   *       name wins; otherwise the user has to say.
+   *   <li>The asset is the newest release's zip with its version replaced by {@code *}. If it has
+   *       several, the one named like the repository wins ({@code Polestar-*.zip} over {@code
+   *       Polestar_Recorder-*.zip} in {@code polestar}).
+   *   <li>With {@code flavor}, a release that has a {@code release.json} needs no asset.
+   * </ul>
+   */
+  @Override
+  public AddonSpec discover(AddonSpec spec) {
+    var repo = spec.source().reference();
+    if (!REPO.matcher(repo).matches()) {
+      throw new ConfigException("'" + repo + "' is not owner/repo");
+    }
+    boolean prereleases = spec.option("prerelease").filter(Boolean::parseBoolean).isPresent();
+    var published =
+        listed(repo).stream().filter(r -> !r.draft() && (prereleases || !r.prerelease())).toList();
+    if (published.isEmpty()) {
+      throw new BackendException(repo + " has no published releases on GitHub");
+    }
+    var options = new LinkedHashMap<>(spec.options());
+    var prefix = spec.option("tag_prefix").orElseGet(() -> tagPrefix(repo, published));
+    if (!prefix.isEmpty()) {
+      options.put("tag_prefix", prefix);
+    }
+    var newest =
+        published.stream()
+            .filter(r ->
+                versionOf(r.tag(), prefix)
+                    .filter(v -> prereleases || !v.isPrerelease())
+                    .isPresent())
+            .max(comparing(r -> versionOf(r.tag(), prefix).orElseThrow()))
+            .orElseThrow(() ->
+                new BackendException(
+                    "no release of " + repo + " has a tag like " + prefix + "v1.2.3"));
+    boolean byFlavor =
+        spec.option("flavor").isPresent()
+            && newest.assets().stream().anyMatch(a -> a.name().equals(RELEASE_JSON));
+    if (spec.option("asset").isEmpty() && !byFlavor) {
+      options.put("asset", assetPattern(repo, newest, prefix));
+    }
+    return new AddonSpec(
+        spec.name(), spec.source(), spec.version(), spec.depends(), options, spec.hooks());
+  }
+
+  /** What comes before the version in {@code tag}: up to its first digit, less a {@code v}. */
+  static String prefixOf(String tag) {
+    int digit = 0;
+    while (digit < tag.length() && !Character.isDigit(tag.charAt(digit))) {
+      digit++;
+    }
+    var prefix = tag.substring(0, digit);
+    return prefix.endsWith("v") || prefix.endsWith("V")
+        ? prefix.substring(0, prefix.length() - 1)
+        : prefix;
+  }
+
+  private static String tagPrefix(String repo, List<GitHubApi.GitHubRelease> releases) {
+    // Newest first, as GitHub lists them, so each group's first release is its latest.
+    var groups = new LinkedHashMap<String, List<GitHubApi.GitHubRelease>>();
+    for (var release : releases) {
+      var prefix = prefixOf(release.tag());
+      if (versionOf(release.tag(), prefix).isPresent()) {
+        groups.computeIfAbsent(prefix, p -> new ArrayList<>()).add(release);
+      }
+    }
+    groups
+        .values()
+        .removeIf(group ->
+            group.stream().flatMap(r -> r.assets().stream()).noneMatch(a -> isZip(a.name())));
+    if (groups.isEmpty()) {
+      throw new BackendException(
+          "no release of " + repo + " has both a version tag and a zip; is it an addon?");
+    }
+    if (groups.size() == 1) {
+      return groups.firstEntry().getKey();
+    }
+    // Several things are released from the repository, e.g. an addon and its desktop companion.
+    // The addon is the one named like the repository; if that leaves several (a monorepo that
+    // moved to a new tag scheme), the one released most recently.
+    var repoName = normalized(repo.substring(repo.indexOf('/') + 1));
+    var named =
+        groups.entrySet().stream()
+            .filter(e -> namedLike(repoName, e.getKey(), e.getValue().getFirst()))
+            .map(Map.Entry::getKey)
+            .toList();
+    if (!named.isEmpty()) {
+      return named.getFirst();
+    }
+    throw new BackendException(
+        repo
+            + " publishes several things under different tag prefixes ("
+            + groups.entrySet().stream()
+                .map(e -> "'" + e.getKey() + "', e.g. " + e.getValue().getFirst().tag())
+                .collect(joining("; "))
+            + "); set tag_prefix to the addon's");
+  }
+
+  /**
+   * Whether the releases tagged {@code prefix} look like the repository's addon: the prefix is part
+   * of the repository name ({@code spoken/} in {@code spoken-wow}), or so is the name of a zip of
+   * its latest release ({@code Polestar-*.zip} in {@code polestar}).
+   */
+  private static boolean namedLike(String repoName, String prefix, GitHubApi.GitHubRelease latest) {
+    var p = normalized(prefix);
+    if (!p.isEmpty() && repoName.contains(p)) {
+      return true;
+    }
+    var version = latest.tag().substring(prefix.length());
+    return latest.assets().stream()
+        .map(GitHubApi.GitHubAsset::name)
+        .filter(n -> isZip(n))
+        .map(n -> normalized(stem(withoutVersion(n, version))))
+        .anyMatch(stem -> !stem.isEmpty() && repoName.contains(stem));
+  }
+
+  private static String assetPattern(String repo, GitHubApi.GitHubRelease release, String prefix) {
+    var zips = release.assets().stream().map(GitHubApi.GitHubAsset::name).filter(n -> isZip(n));
+    var version = release.tag().substring(prefix.length());
+    var patterns = zips.map(n -> withoutVersion(n, version)).distinct().toList();
+    if (patterns.isEmpty()) {
+      throw new BackendException(
+          release.tag() + " of " + repo + " has no zip; set asset to the archive to install");
+    }
+    var repoName = normalized(repo.substring(repo.indexOf('/') + 1));
+    var chosen =
+        patterns.size() == 1
+            ? patterns
+            : patterns.stream().filter(p -> normalized(stem(p)).equals(repoName)).toList();
+    if (chosen.size() == 1) {
+      var glob = Glob.of(chosen.getFirst());
+      if (release.assets().stream().filter(a -> glob.matches(a.name())).count() == 1) {
+        return chosen.getFirst();
+      }
+    }
+    boolean manifest = release.assets().stream().anyMatch(a -> a.name().equals(RELEASE_JSON));
+    throw new BackendException(
+        release.tag()
+            + " of "
+            + repo
+            + " has several zips ("
+            + release.assets().stream()
+                .map(GitHubApi.GitHubAsset::name)
+                .filter(n -> isZip(n))
+                .collect(joining(", "))
+            + "); set asset to a pattern for the one to install, e.g. '"
+            + patterns.getFirst()
+            + "'"
+            + (manifest ? ", or flavor to the game version (it has a " + RELEASE_JSON + ")" : ""));
+  }
+
+  /** {@code name} with the version from the tag replaced by {@code *}, with or without its v. */
+  static String withoutVersion(String name, String version) {
+    var bare = version.startsWith("v") || version.startsWith("V") ? version.substring(1) : version;
+    for (var v : List.of(version, bare)) {
+      if (!v.isEmpty() && name.contains(v)) {
+        return name.replace(v, "*");
+      }
+    }
+    return name;
+  }
+
+  /**
+   * The part of an asset pattern before its version, e.g. {@code Polestar} of {@code
+   * Polestar-*.zip}.
+   */
+  private static String stem(String pattern) {
+    int star = pattern.indexOf('*');
+    return star < 0
+        ? pattern.substring(0, pattern.length() - ".zip".length())
+        : pattern.substring(0, star);
+  }
+
+  private static String normalized(String text) {
+    return text.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+  }
+
+  private static boolean isZip(String name) {
+    return name.toLowerCase(Locale.ROOT).endsWith(".zip");
   }
 
   /**

@@ -28,6 +28,7 @@ import picocli.CommandLine.ScopeType;
     versionProvider = WowfamCommand.VersionProvider.class,
     description = "Installs and updates World of Warcraft addons listed in wowfam.toml.",
     subcommands = {
+      AddCommand.class,
       CommandLine.HelpCommand.class,
       InstallCommand.class,
       ListCommand.class,

@@ -21,6 +21,7 @@ While the repository is private, mise needs a token that can read it (`GITHUB_TO
 ## Usage
 
 ```sh
+wowfam add https://github.com/fitzforge/polestar   # add an addon to wowfam.toml and install it
 wowfam install            # install everything in ./wowfam.toml (keeps versions pinned in wowfam.lock)
 wowfam install spoken     # one addon, plus whatever it `depends` on
 wowfam update             # move everything to the newest matching release
@@ -33,6 +34,28 @@ Set `GITHUB_TOKEN` (or `GH_TOKEN`) to raise GitHub's API rate limit or reach pri
 `HTTPS_PROXY` / `NO_PROXY` are honoured. The native binary trusts the CA certificates of the JDK it
 was built with; behind a TLS-intercepting proxy, point it at another trust store with
 `wowfam -Djavax.net.ssl.trustStore=/path/to/cacerts ...`.
+
+### Adding addons
+
+`wowfam add <source>` takes `github:owner/repo`, `owner/repo` or a GitHub URL, works out the
+entry from the repository's releases, checks that it finds a release, appends it to `wowfam.toml`
+(the rest of the file is left as it is), prints it and installs the addon. If the install fails,
+the entry is taken out again.
+
+- **`tag_prefix`**: tags are grouped by what comes before their version. Groups without a zip are
+  dropped, which leaves out desktop apps released from the same repository. If several remain,
+  the one named like the repository wins (`spoken/` in `spoken-wow`), then the most recently
+  released.
+- **`asset`**: the newest release's zip with its version replaced by `*`. If there are several
+  zips, the one named like the repository wins (`Polestar-*.zip` over `Polestar_Recorder-*.zip`).
+  With `--flavor`, a release that carries a `release.json` needs no asset.
+- **name**: the repository name in kebab-case (`BetterVendorPrice` → `better-vendor-price`).
+
+When it can't tell, it says which option to give. `--name`, `--version`, `--tag-prefix`,
+`--asset`, `--flavor`, `--nolib` and `--prerelease` set the entry's fields by hand.
+`--dry-run` prints the entry without changing anything, and `--no-install` only writes it. An
+addon folder that was already in AddOns but not managed by wowfam is replaced by the release and
+managed from then on; `add` says so.
 
 ## wowfam.toml
 

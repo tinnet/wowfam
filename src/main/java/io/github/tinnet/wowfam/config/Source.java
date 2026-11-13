@@ -1,10 +1,17 @@
 package io.github.tinnet.wowfam.config;
 
+import java.util.regex.Pattern;
+
 /**
  * Where an addon comes from, written {@code <backend>:<reference>} as in mise, e.g. {@code
  * github:rusty-key/spoken-wow}.
  */
 public record Source(String backend, String reference) {
+
+  private static final Pattern GITHUB_URL =
+      Pattern.compile(
+          "(?i)(?:https?://)?(?:www\\.)?github\\.com/([\\w.-]+)/([\\w.-]+?)(?:\\.git)?(?:[/?#].*)?");
+  private static final Pattern OWNER_REPO = Pattern.compile("[\\w.-]+/[\\w.-]+");
 
   public Source {
     if (backend == null || backend.isBlank() || reference == null || reference.isBlank()) {
@@ -19,6 +26,31 @@ public record Source(String backend, String reference) {
           "invalid source '" + text + "': expected <backend>:<reference>, e.g. github:owner/repo");
     }
     return new Source(text.substring(0, colon).strip(), text.substring(colon + 1).strip());
+  }
+
+  /**
+   * A source as a user types it on the command line: {@code <backend>:<reference>}, a GitHub URL
+   * such as {@code https://github.com/owner/repo/releases}, or a bare {@code owner/repo}, which
+   * means GitHub.
+   */
+  public static Source fromInput(String text) {
+    var trimmed = text.strip();
+    var url = GITHUB_URL.matcher(trimmed);
+    if (url.matches()) {
+      return new Source("github", url.group(1) + "/" + url.group(2));
+    }
+    if (OWNER_REPO.matcher(trimmed).matches()) {
+      return new Source("github", trimmed);
+    }
+    return parse(trimmed);
+  }
+
+  /**
+   * The last part of the reference, e.g. {@code spoken-wow} for {@code
+   * github:rusty-key/spoken-wow}.
+   */
+  public String shortName() {
+    return reference.substring(reference.lastIndexOf('/') + 1);
   }
 
   @Override
