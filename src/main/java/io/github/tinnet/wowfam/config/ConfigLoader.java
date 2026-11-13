@@ -8,7 +8,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.dataformat.toml.TomlMapper;
@@ -52,6 +54,15 @@ public final class ConfigLoader {
   }
 
   public Config load(Path file) {
+    return load(file, null);
+  }
+
+  /**
+   * Reads {@code file}, with {@code addonsDir} in place of its {@code settings.addons_dir}.
+   *
+   * @param addonsDir replaces {@code settings.addons_dir} (the {@code --addons-dir} option)
+   */
+  public Config load(Path file, @Nullable Path addonsDir) {
     String text;
     try {
       text = Files.readString(file);
@@ -65,10 +76,14 @@ public final class ConfigLoader {
     } catch (IOException e) {
       throw new ConfigException("cannot read " + file + ": " + e.getMessage(), e);
     }
-    return parse(file.toAbsolutePath().normalize(), text);
+    return parse(file.toAbsolutePath().normalize(), text, addonsDir);
   }
 
   public Config parse(Path file, String toml) {
+    return parse(file, toml, null);
+  }
+
+  public Config parse(Path file, String toml, @Nullable Path addonsDir) {
     JsonNode root;
     try {
       root = TOML.readTree(toml);
@@ -76,7 +91,7 @@ public final class ConfigLoader {
       throw new ConfigException("invalid TOML in " + file + ": " + e.getOriginalMessage(), e);
     }
     var base = file.getParent() == null ? Path.of("").toAbsolutePath() : file.getParent();
-    var settings = settings(root.path("settings"), base);
+    var settings = settings(root.path("settings"), base, addonsDir);
     var hooks = hooks("hooks", root.path("hooks"));
     var addons = new LinkedHashMap<String, AddonSpec>();
     var addonsNode = root.path("addons");
@@ -84,7 +99,7 @@ public final class ConfigLoader {
       throw new ConfigException("'addons' must be a table in " + file);
     }
     for (var entry : addonsNode.properties()) {
-      addons.put(entry.getKey(), addon(entry.getKey(), entry.getValue()));
+      addons.put(entry.getKey(), addon(entry.getKey(), entry.getValue(), settings.game()));
     }
     for (var spec : addons.values()) {
       for (var dep : spec.depends()) {
@@ -102,19 +117,21 @@ public final class ConfigLoader {
     return new Config(file, settings, hooks, addons);
   }
 
-  private Settings settings(JsonNode node, Path base) {
+  private Settings settings(JsonNode node, Path base, @Nullable Path override) {
     var addonsDir =
-        node.path("addons_dir").isString()
-            ? resolve(base, node.path("addons_dir").asString())
-            : base.resolve("AddOns");
+        override != null
+            ? override.toAbsolutePath().normalize()
+            : node.path("addons_dir").isString()
+                ? resolve(base, node.path("addons_dir").asString())
+                : base.resolve("AddOns");
     var cacheDir =
         node.path("cache_dir").isString()
             ? resolve(base, node.path("cache_dir").asString())
             : defaultCacheDir();
-    return new Settings(addonsDir, cacheDir);
+    return new Settings(addonsDir, cacheDir, Game.detect(addonsDir));
   }
 
-  private AddonSpec addon(String name, JsonNode node) {
+  private AddonSpec addon(String name, JsonNode node, Optional<Game> game) {
     if (!node.isObject()) {
       throw new ConfigException("addons." + name + " must be a table");
     }
@@ -142,6 +159,11 @@ public final class ConfigLoader {
       if (!COMMON_KEYS.contains(entry.getKey())) {
         options.put(entry.getKey(), scalar(name, entry.getKey(), entry.getValue()));
       }
+    }
+    // The game folder says which client the addons are for; a flavor or interface written in the
+    // file takes precedence.
+    if (game.isPresent() && !options.containsKey("flavor") && !options.containsKey("interface")) {
+      options.put("interface", Integer.toString(game.orElseThrow().interfaceNumber()));
     }
     var hooks = hooks("addons." + name + ".hooks", node.path("hooks"));
     return new AddonSpec(name, source, version, depends, options, hooks);

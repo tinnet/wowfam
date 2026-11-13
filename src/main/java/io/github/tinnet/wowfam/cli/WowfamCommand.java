@@ -8,7 +8,6 @@ import io.github.tinnet.wowfam.backend.github.GitHubBackend;
 import io.github.tinnet.wowfam.config.Config;
 import io.github.tinnet.wowfam.config.ConfigException;
 import io.github.tinnet.wowfam.config.ConfigLoader;
-import io.github.tinnet.wowfam.config.Settings;
 import io.github.tinnet.wowfam.install.InstallException;
 import java.net.URI;
 import java.nio.file.Path;
@@ -100,15 +99,7 @@ public final class WowfamCommand implements Runnable {
 
   Config loadConfig() {
     var file = config != null ? config : Path.of(Config.FILE_NAME);
-    var loaded = new ConfigLoader(env, Path.of(System.getProperty("user.home"))).load(file);
-    if (addonsDir == null) {
-      return loaded;
-    }
-    return new Config(
-        loaded.file(),
-        new Settings(addonsDir.toAbsolutePath().normalize(), loaded.settings().cacheDir()),
-        loaded.hooks(),
-        loaded.addons());
+    return new ConfigLoader(env, Path.of(System.getProperty("user.home"))).load(file, addonsDir);
   }
 
   Backends backends() {

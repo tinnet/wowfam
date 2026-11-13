@@ -131,6 +131,9 @@ final class AddCommand implements Callable<Integer> {
     if (prerelease) {
       options.put("prerelease", "true");
     }
+    // Not written to wowfam.toml: loading the file sets it from the game folder every time.
+    var game = config.settings().game().filter(g -> flavor == null);
+    game.ifPresent(g -> options.put("interface", Integer.toString(g.interfaceNumber())));
 
     var backends = root.backends();
     var backend = backends.get(src.backend());
@@ -156,18 +159,30 @@ final class AddCommand implements Callable<Integer> {
                         + " matches version '"
                         + version
                         + "'"
-                        + addon.option("flavor").map(f -> " for flavor '" + f + "'").orElse("")));
+                        + addon
+                            .option("flavor")
+                            .map(f -> " for flavor '" + f + "'")
+                            .or(() -> game.map(g -> " for " + g))
+                            .orElse("")));
     try {
       release.asset();
     } catch (BackendException e) {
       throw new BackendException(src + ": " + e.getMessage(), e);
     }
 
-    var table = ConfigEditor.addonTable(addon);
+    var written = new LinkedHashMap<>(addon.options());
+    if (game.isPresent()) {
+      written.remove("interface");
+    }
+    var table =
+        ConfigEditor.addonTable(
+            new AddonSpec(addon.name(), addon.source(), addon.version(), List.of(), written));
     var out = spec.commandLine().getOut();
     if (dryRun) {
       out.print(table);
-      out.printf("(dry run: would install %s from %s)%n", release.version(), release.tag());
+      out.printf(
+          "(dry run: would install %s from %s%s)%n",
+          release.version(), release.tag(), game.map(g -> " for " + g).orElse(""));
       return 0;
     }
     var original = read(config.file());

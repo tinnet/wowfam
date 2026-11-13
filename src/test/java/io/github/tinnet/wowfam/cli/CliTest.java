@@ -4,6 +4,7 @@ import static io.github.tinnet.wowfam.FakeGitHub.addonZip;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.tinnet.wowfam.FakeGitHub;
+import io.github.tinnet.wowfam.WowInstall;
 import io.github.tinnet.wowfam.config.ConfigLoader;
 import io.github.tinnet.wowfam.config.Source;
 import io.github.tinnet.wowfam.lock.LockFile;
@@ -437,5 +438,43 @@ final class CliTest {
     assertThat(AddCommand.defaultName(Source.parse("github:rusty-key/spoken-wow")))
         .isEqualTo("spoken-wow");
     assertThat(AddCommand.defaultName(Source.parse("github:o/Questie_2"))).isEqualTo("questie-2");
+  }
+
+  @Test
+  void inAGameFolderReleaseJsonPicksTheZipForThatGame() throws Exception {
+    var wow = WowInstall.create(tmp, Map.of("_forever_", "wowf"), "eu|1|abc|1.60.1.70938|wowf\n");
+    config = wow.resolve("_forever_/wowfam.toml");
+    addons = wow.resolve("_forever_/Interface/AddOns");
+    Files.writeString(
+        config,
+        """
+        [settings]
+        addons_dir = "Interface/AddOns"
+        cache_dir = "cache"
+        """);
+    github.release(
+        "someone/bars",
+        "v1.0.0",
+        addonZip("Bars-v1.0.0.zip", "1.0.0-retail", Map.of("Bars", "")),
+        addonZip("Bars-v1.0.0-forever.zip", "1.0.0-forever", Map.of("Bars", "")),
+        FakeGitHub.releaseJson(
+            Map.of(
+                "Bars-v1.0.0.zip", List.of("mainline"),
+                "Bars-v1.0.0-forever.zip", List.of("forever"))));
+
+    assertThat(run("add", "someone/bars")).as(err.toString()).isEqualTo(0);
+    // Nothing to write down: the game folder says which zip, every time.
+    assertThat(config)
+        .content()
+        .endsWith(
+            """
+            [addons.bars]
+            source = "github:someone/bars"
+            version = "latest"
+            """);
+    assertThat(addons.resolve("Bars/Bars.toc")).content().contains("## Version: 1.0.0-forever");
+
+    assertThat(run("list")).isEqualTo(0);
+    assertThat(out.toString()).startsWith("game: wowf 1.60.1.70938 (interface 16001)");
   }
 }

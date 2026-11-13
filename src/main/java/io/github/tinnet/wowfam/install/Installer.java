@@ -123,7 +123,10 @@ public final class Installer {
                         + ") matches version '"
                         + spec.version()
                         + "'"
-                        + spec.option("flavor").map(f -> " for flavor '" + f + "'").orElse("")
+                        + spec.option("flavor")
+                            .map(f -> " for flavor '" + f + "'")
+                            .or(() -> spec.option("interface").map(i -> " for interface " + i))
+                            .orElse("")
                         + (releases.isEmpty()
                             ? "; none found at all, check tag_prefix and asset"
                             : "")));

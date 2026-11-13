@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -43,6 +44,10 @@ import tools.jackson.databind.json.JsonMapper;
  *       release that carries the packager's {@code release.json} then installs the zip that file
  *       lists for the flavor, and is passed over if it lists none; {@code asset}, if given, still
  *       has to match. Releases without a {@code release.json} are picked by {@code asset} alone.
+ *   <li>{@code interface} — like {@code flavor}, but by the {@code ## Interface} number of the game
+ *       ({@code 16001}); a release.json entry for the same major and minor version matches. Set
+ *       from the game folder when the AddOns folder is inside a WoW install and {@code flavor} is
+ *       not given.
  *   <li>{@code nolib} — with {@code flavor}: {@code true} to take the packager's {@code -nolib} zip
  *       rather than the one with libraries embedded, default {@code false}.
  * </ul>
@@ -94,7 +99,7 @@ public final class GitHubBackend implements Backend {
     var prefix = spec.option("tag_prefix").orElse("");
     var assetGlob = Glob.of(spec.option("asset").orElse("*.zip"));
     boolean prereleases = spec.option("prerelease").filter(Boolean::parseBoolean).isPresent();
-    boolean byFlavor = spec.option("flavor").isPresent();
+    boolean byFlavor = target(spec).isPresent();
 
     var result = new ArrayList<Release>();
     for (var release : listed(repo)) {
@@ -173,7 +178,7 @@ public final class GitHubBackend implements Backend {
                 new BackendException(
                     "no release of " + repo + " has a tag like " + prefix + "v1.2.3"));
     boolean byFlavor =
-        spec.option("flavor").isPresent()
+        target(spec).isPresent()
             && newest.assets().stream().anyMatch(a -> a.name().equals(RELEASE_JSON));
     if (spec.option("asset").isEmpty() && !byFlavor) {
       options.put("asset", assetPattern(repo, newest, prefix));
@@ -324,8 +329,8 @@ public final class GitHubBackend implements Backend {
    */
   @Override
   public Optional<Release> resolve(AddonSpec spec, Release release) {
-    var flavor = spec.option("flavor").map(GitHubBackend::canonicalFlavor);
-    if (flavor.isEmpty()
+    var target = target(spec);
+    if (target.isEmpty()
         || release.assets().stream().noneMatch(a -> a.name().equals(RELEASE_JSON))) {
       return Optional.of(release);
     }
@@ -358,7 +363,7 @@ public final class GitHubBackend implements Backend {
       var filename = entry.path("filename").asString("");
       boolean forFlavor = false;
       for (var metadata : entry.path("metadata")) {
-        forFlavor |= metadata.path("flavor").asString("").equalsIgnoreCase(flavor.orElseThrow());
+        forFlavor |= target.orElseThrow().matches().test(metadata);
       }
       if (forFlavor
           && entry.path("nolib").asBoolean(false) == nolib
@@ -377,13 +382,45 @@ public final class GitHubBackend implements Backend {
               + release.tag()
               + " lists "
               + matching.stream().map(GitHubApi.GitHubAsset::name).toList()
-              + " for flavor '"
-              + flavor.orElseThrow()
-              + "'; narrow it down with 'asset'");
+              + " for "
+              + target.orElseThrow().description()
+              + "; narrow it down with 'asset'");
     }
     return matching.stream()
         .findFirst()
         .map(a -> new Release(release.version(), release.tag(), asset(a)));
+  }
+
+  /**
+   * What an entry of {@code release.json} has to be for: the {@code flavor} the user named, else
+   * the {@code interface} of the game the AddOns folder belongs to.
+   */
+  record Target(String description, Predicate<JsonNode> matches) {}
+
+  static Optional<Target> target(AddonSpec spec) {
+    var flavor = spec.option("flavor").map(GitHubBackend::canonicalFlavor);
+    if (flavor.isPresent()) {
+      var f = flavor.orElseThrow();
+      return Optional.of(
+          new Target("flavor '" + f + "'", m -> m.path("flavor").asString("").equalsIgnoreCase(f)));
+    }
+    return spec.option("interface")
+        .map(i -> {
+          int wanted;
+          try {
+            wanted = Integer.parseInt(i.strip());
+          } catch (NumberFormatException e) {
+            throw new ConfigException(
+                "addons."
+                    + spec.name()
+                    + ".interface must be a number like 11508, not '"
+                    + i
+                    + "'");
+          }
+          // The same major and minor version: a game patch must not leave every addon behind.
+          return new Target(
+              "interface " + wanted, m -> m.path("interface").asInt(-1) / 100 == wanted / 100);
+        });
   }
 
   /** The packager's name for a flavor: {@code retail} is {@code mainline}, and so on. */

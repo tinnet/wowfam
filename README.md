@@ -48,7 +48,7 @@ the entry is taken out again.
   released.
 - **`asset`**: the newest release's zip with its version replaced by `*`. If there are several
   zips, the one named like the repository wins (`Polestar-*.zip` over `Polestar_Recorder-*.zip`).
-  With `--flavor`, a release that carries a `release.json` needs no asset.
+  In a game folder (or with `--flavor`), a release that carries a `release.json` needs no asset.
 - **name**: the repository name in kebab-case (`BetterVendorPrice` → `better-vendor-price`).
 
 When it can't tell, it says which option to give. `--name`, `--version`, `--tag-prefix`,
@@ -86,22 +86,34 @@ packs from one repository under prefixed tags.
 ### Game flavors
 
 Addons built with the [BigWigs packager](https://github.com/BigWigsMods/packager) attach a
-`release.json` to each GitHub release, saying which zip is for which game flavor. Set `flavor` and
-wowfam reads it, so there is no `asset` glob to keep right:
+`release.json` to each GitHub release, saying which zip is for which game version. wowfam uses it
+to install the zip for your game.
+
+When `addons_dir` is inside a WoW install, wowfam reads which game it is from the files the
+Battle.net launcher keeps there (`.flavor.info` in the game folder, `.build.info` beside it), works
+out its interface number (1.60.1 → `16001`, the `## Interface` addons declare) and picks the zip
+`release.json` lists for it. A newer interface of the same major and minor version still matches,
+so a game patch doesn't leave every addon behind. `wowfam list` shows what it found:
+
+```
+game: wowf 1.60.1.70938 (interface 16001)
+```
+
+Elsewhere, or to override it, name the flavor or interface yourself:
 
 ```toml
 [addons.bigwigs]
 source = "github:BigWigsMods/BigWigs"
-flavor = "classic_era"   # the packager's names: mainline, classic, bcc, wrath, cata, mists, ...
+flavor = "classic_era"   # the packager's names: mainline, classic, bcc, wrath, cata, mists, forever, ...
+# interface = 11508      # or the interface number
 # nolib = true           # take the -nolib zip instead of the one with libraries embedded
 ```
 
 `retail` (for `mainline`), `classic_era` / `vanilla` (`classic`), `tbc` (`bcc`), `wotlk` (`wrath`),
 `cataclysm` (`cata`) and `mop` (`mists`) are understood too. A release whose `release.json` lists
-nothing for the flavor is passed over, so an addon that dropped your flavor stays on its last
-release that had it. If several zips are listed for the flavor, `asset` narrows them down.
-Releases without a `release.json` are picked by `asset` as usual, and without `flavor` the file is
-ignored.
+nothing for your game is passed over, so an addon that dropped your game stays on its last release
+that had it. If several zips are listed, `asset` narrows them down. Releases without a
+`release.json` are picked by `asset` as usual.
 
 ### Hooks
 

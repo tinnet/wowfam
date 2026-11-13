@@ -28,7 +28,9 @@ final class ListCommand implements Callable<Integer> {
       var installed = lock.get(spec.name()).map(LockEntry::version).orElse("-");
       table.row(spec.name(), spec.version(), installed, spec.source().toString());
     }
-    table.print(spec.commandLine().getOut());
+    var out = spec.commandLine().getOut();
+    config.settings().game().ifPresent(g -> out.println("game: " + g));
+    table.print(out);
     return 0;
   }
 }

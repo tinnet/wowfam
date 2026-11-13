@@ -136,10 +136,21 @@ public final class FakeGitHub implements AutoCloseable {
                 filename.contains("nolib"),
                 "metadata",
                 flavors.stream()
-                    .map(f -> Map.<String, Object>of("flavor", f, "interface", 11508))
+                    .map(f -> Map.<String, Object>of("flavor", f, "interface", interfaceOf(f)))
                     .toList())));
     var json = JsonMapper.builder().build().writeValueAsString(Map.of("releases", releases));
     return new FakeAsset("release.json", json.getBytes(UTF_8));
+  }
+
+  /** A current {@code ## Interface} of each flavor, as the packager writes it. */
+  private static int interfaceOf(String flavor) {
+    return switch (flavor) {
+      case "mainline" -> 120105;
+      case "bcc" -> 20506;
+      case "mists" -> 50503;
+      case "forever" -> 16001;
+      default -> 11508;
+    };
   }
 
   private void handle(HttpExchange exchange) throws IOException {

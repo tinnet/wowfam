@@ -87,6 +87,16 @@ final class GitHubBackendTest {
     assertThat(picked.apply(Map.of("flavor", "mainline", "nolib", "true")))
         .isEqualTo("Addon-v2.0.0-nolib.zip");
     assertThat(picked.apply(Map.of("flavor", "cata"))).isEqualTo("(none)");
+    // By the game's interface: the same major and minor version is enough.
+    assertThat(picked.apply(Map.of("interface", "11509"))).isEqualTo("Addon-v2.0.0-classic.zip");
+    assertThat(picked.apply(Map.of("interface", "20506"))).isEqualTo("Addon-v2.0.0-classic.zip");
+    assertThat(picked.apply(Map.of("interface", "120107"))).isEqualTo("Addon-v2.0.0.zip");
+    assertThat(picked.apply(Map.of("interface", "11600"))).isEqualTo("(none)");
+    // A flavor named in wowfam.toml wins over the game's interface.
+    assertThat(picked.apply(Map.of("interface", "120105", "flavor", "classic")))
+        .isEqualTo("Addon-v2.0.0-classic.zip");
+    assertThatThrownBy(() -> picked.apply(Map.of("interface", "classic")))
+        .hasMessageContaining("interface must be a number");
     // One listing serves them all.
     assertThat(github.requests()).filteredOn(r -> r.contains("/repos/")).hasSize(1);
   }
