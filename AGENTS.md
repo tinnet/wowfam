@@ -1,8 +1,10 @@
 # AGENTS.md
 
 Guidance for coding agents (and humans) working in this repository. The [README](README.md)
-explains what wowfam is, its configuration format and the package layout; this file covers how
-to work on it.
+is for users: what wowfam does and how to configure it. [`docs/design.md`](docs/design.md)
+explains the internals and package layout, [`docs/development.md`](docs/development.md) the
+build, tests and releases. This file covers how to work on it. Keep the README user-facing:
+internals and contributor notes go in `docs/`.
 
 ## Setup and commands
 
