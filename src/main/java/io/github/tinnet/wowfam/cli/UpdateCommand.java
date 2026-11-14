@@ -33,10 +33,6 @@ final class UpdateCommand implements Callable<Integer> {
 
   @Override
   public Integer call() {
-    var config = root.loadConfig();
-    return Reports.print(
-        spec,
-        new Installer(root.backends(config), spec.commandLine().getOut()::println, !noHooks)
-            .run(config, addons, Installer.Mode.UPDATE, false));
+    return Reports.runGames(root, spec, addons, Installer.Mode.UPDATE, false, !noHooks);
   }
 }

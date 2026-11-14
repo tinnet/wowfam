@@ -12,7 +12,7 @@ import picocli.CommandLine.Spec;
     name = "list",
     aliases = "ls",
     mixinStandardHelpOptions = true,
-    description = "List the addons in wowfam.toml and what is installed.")
+    description = "List the games and addons in wowfam.toml and what is installed.")
 final class ListCommand implements Callable<Integer> {
 
   @ParentCommand WowfamCommand root;
@@ -21,16 +21,26 @@ final class ListCommand implements Callable<Integer> {
 
   @Override
   public Integer call() {
-    var config = root.loadConfig();
-    var lock = LockFile.read(config.lockFile());
-    var table = new Table("ADDON", "REQUESTED", "INSTALLED", "SOURCE");
-    for (var spec : config.addons().values()) {
-      var installed = lock.get(spec.name()).map(LockEntry::version).orElse("-");
-      table.row(spec.name(), spec.version(), installed, spec.source().toString());
-    }
     var out = spec.commandLine().getOut();
-    config.settings().game().ifPresent(g -> out.println("game: " + g));
-    table.print(out);
+    var games = root.games(root.loadWorkspace());
+    for (var config : games) {
+      if (!config.name().equals(games.getFirst().name())) {
+        out.println();
+      }
+      var lock = LockFile.read(config.lockFile(), config.name());
+      out.println(
+          config.name()
+              + ": "
+              + config.settings().game().map(Object::toString).orElse("unknown client")
+              + ", "
+              + config.settings().addonsDir());
+      var table = new Table("ADDON", "REQUESTED", "INSTALLED", "SOURCE");
+      for (var addon : config.addons().values()) {
+        var installed = lock.get(addon.name()).map(LockEntry::version).orElse("-");
+        table.row(addon.name(), addon.version(), installed, addon.source().toString());
+      }
+      table.print(out);
+    }
     return 0;
   }
 }

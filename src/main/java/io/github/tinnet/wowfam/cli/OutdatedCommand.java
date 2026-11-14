@@ -22,26 +22,36 @@ final class OutdatedCommand implements Callable<Integer> {
 
   @Override
   public Integer call() {
-    var config = root.loadConfig();
-    var lock = LockFile.read(config.lockFile());
-    var backends = root.backends(config);
-    var table = new Table("ADDON", "INSTALLED", "LATEST");
+    var games = root.games(root.loadWorkspace());
+    var table =
+        games.size() > 1
+            ? new Table("GAME", "ADDON", "INSTALLED", "LATEST")
+            : new Table("ADDON", "INSTALLED", "LATEST");
     int outdated = 0;
-    for (var addon : config.addons().values()) {
-      var backend = backends.get(addon.source().backend());
-      var newest = ReleaseSelector.newest(backend, addon, backend.releases(addon));
-      if (newest.isEmpty()) {
-        continue;
-      }
-      var installed = lock.get(addon.name()).map(LockEntry::version);
-      var isOutdated =
-          installed
-              .flatMap(Version::parse)
-              .map(v -> v.compareTo(newest.orElseThrow().version()) < 0)
-              .orElse(true);
-      if (isOutdated) {
-        outdated++;
-        table.row(addon.name(), installed.orElse("-"), newest.orElseThrow().version().toString());
+    for (var config : games) {
+      var lock = LockFile.read(config.lockFile(), config.name());
+      var backends = root.backends(config);
+      for (var addon : config.addons().values()) {
+        var backend = backends.get(addon.source().backend());
+        var newest = ReleaseSelector.newest(backend, addon, backend.releases(addon));
+        if (newest.isEmpty()) {
+          continue;
+        }
+        var installed = lock.get(addon.name()).map(LockEntry::version);
+        var isOutdated =
+            installed
+                .flatMap(Version::parse)
+                .map(v -> v.compareTo(newest.orElseThrow().version()) < 0)
+                .orElse(true);
+        if (isOutdated) {
+          outdated++;
+          var latest = newest.orElseThrow().version().toString();
+          if (games.size() > 1) {
+            table.row(config.name(), addon.name(), installed.orElse("-"), latest);
+          } else {
+            table.row(addon.name(), installed.orElse("-"), latest);
+          }
+        }
       }
     }
     var out = spec.commandLine().getOut();

@@ -62,23 +62,24 @@ final class GameTest {
   @Test
   void addonsInAGameFolderAreForItsInterfaceUnlessTheySayOtherwise() throws Exception {
     var wow = WowInstall.create(tmp, Map.of("_forever_", "wowf"), "eu|1|abc|1.60.1.70938|wowf\n");
-    var file = wow.resolve("_forever_/wowfam.toml");
+    var file = tmp.resolve("wowfam.toml");
     var toml =
         """
-        [settings]
-        addons_dir = "Interface/AddOns"
-        [addons.a]
+        [games.g]
+        dir = "World of Warcraft/_forever_"
+        [games.g.addons.a]
         source = "github:o/a"
-        [addons.b]
+        [games.g.addons.b]
         source = "github:o/b"
         flavor = "classic"
-        [addons.c]
+        [games.g.addons.c]
         source = "github:o/c"
         interface = 11508
         """;
     var loader = new ConfigLoader(Map.of(), tmp);
 
-    var config = loader.parse(file, toml);
+    var config = loader.parse(file, toml).game("g");
+    assertThat(wow).isEqualTo(tmp.resolve("World of Warcraft"));
     assertThat(config.settings().game())
         .hasValueSatisfying(g -> assertThat(g.product()).isEqualTo("wowf"));
     assertThat(interfaceOf(config, "a")).hasValue("16001");
@@ -86,7 +87,8 @@ final class GameTest {
     assertThat(interfaceOf(config, "c")).hasValue("11508");
 
     // --addons-dir elsewhere: no game, nothing added.
-    var elsewhere = loader.parse(file, toml, tmp.resolve("AddOns"));
+    var elsewhere =
+        loader.parse(file, toml, java.util.Optional.of("g"), tmp.resolve("AddOns")).game("g");
     assertThat(elsewhere.settings().game()).isEmpty();
     assertThat(interfaceOf(elsewhere, "a")).isEmpty();
   }

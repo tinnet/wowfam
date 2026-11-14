@@ -7,24 +7,23 @@
 #
 # Try it:  wowfam --config examples/spoken/wowfam.toml install
 
-[settings]
-# Point this at your game's Interface/AddOns folder, e.g.
-#   "~/Games/World of Warcraft/_classic_era_/Interface/AddOns"
+[games.example]
+# For a real game, name its folder instead: dir = "~/Games/World of Warcraft/_classic_era_"
 # Relative paths are relative to this file.
 addons_dir = "AddOns"
 
-[addons.spoken]
+[games.example.addons.spoken]
 source = "github:rusty-key/spoken-wow"
 version = "latest"           # or "3.8.5", or "3" for the newest 3.x
 tag_prefix = "spoken/"       # only tags for the player addon
 asset = "Spoken-*.zip"
 
-[addons.spoken-bosses-audio]
+[games.example.addons.spoken-bosses-audio]
 source = "github:rusty-key/spoken-wow"
 tag_prefix = "bosses-audio/"
 depends = ["spoken"]         # installed after spoken; `wowfam install spoken-bosses-audio` pulls it in
 
-[addons.spoken-readables-audio]
+[games.example.addons.spoken-readables-audio]
 source = "github:rusty-key/spoken-wow"
 tag_prefix = "readables-audio/"
 depends = ["spoken"]

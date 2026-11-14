@@ -20,8 +20,9 @@ final class ConfigEditorTest {
 
   private static final Path FILE = Path.of("/game/wowfam.toml");
 
+  /** Game {@code g} of {@code toml}. */
   private static Config parse(String toml) {
-    return new ConfigLoader(Map.of(), Path.of("/home/tester")).parse(FILE, toml);
+    return new ConfigLoader(Map.of(), Path.of("/home/tester")).parse(FILE, toml).game("g");
   }
 
   @Test
@@ -29,10 +30,10 @@ final class ConfigEditorTest {
     var original =
         """
         # my addons
-        [settings]
+        [games.g]
         addons_dir = "Interface/AddOns"   # relative to this file
 
-        [addons.spoken]
+        [games.g.addons.spoken]
         source = "github:rusty-key/spoken-wow"
         tag_prefix = "spoken/\"\
         """;
@@ -44,13 +45,13 @@ final class ConfigEditorTest {
             List.of(),
             Map.of("prerelease", "true", "asset", "Polestar-*.zip", "zz", "last"));
 
-    var table = ConfigEditor.addonTable(spec);
+    var table = ConfigEditor.addonTable("g", spec);
     var edited = ConfigEditor.append(original, table);
 
     assertThat(table)
         .isEqualTo(
             """
-            [addons.polestar]
+            [games.g.addons.polestar]
             source = "github:fitzforge/polestar"
             version = "latest"
             asset = "Polestar-*.zip"
@@ -67,7 +68,7 @@ final class ConfigEditorTest {
   @Test
   void rejectsNamesThatAreNotBareKeys() {
     var spec = new AddonSpec("a b", Source.parse("github:o/r"), "latest", List.of(), Map.of());
-    assertThatThrownBy(() -> ConfigEditor.addonTable(spec))
+    assertThatThrownBy(() -> ConfigEditor.addonTable("g", spec))
         .isInstanceOf(ConfigException.class)
         .hasMessageContaining("cannot be an addon name");
   }
@@ -79,7 +80,10 @@ final class ConfigEditorTest {
         new AddonSpec(
             "x", Source.parse("github:o/r"), "latest", List.of(), Map.of("asset", value + "!"));
 
-    var read = parse(ConfigEditor.append("", ConfigEditor.addonTable(spec))).addons().get("x");
+    var read =
+        parse(ConfigEditor.append("[games.g]\ndir = \"/g\"\n", ConfigEditor.addonTable("g", spec)))
+            .addons()
+            .get("x");
 
     assertThat(read).isNotNull();
     assertThat(read.option("asset")).hasValue(value + "!");
@@ -117,67 +121,72 @@ final class ConfigEditorTest {
         [settings]
         addons_dir = "Interface/AddOns"
         # cache_dir = "cache"
-        [addons.questie]
+        [games.g.addons.questie]
         source = "github:Questie/Questie"
 
         # the voice-over player
         # (needs the audio packs below)
-        [addons.spoken]
+        [games.g.addons.spoken]
         source = "github:rusty-key/spoken-wow"
         tag_prefix = "spoken/"
 
-        [addons.spoken.hooks]
+        [games.g.addons.spoken.hooks]
         post_install = ["echo hi"]
 
         # sound packs
-        [addons."audio"]
+        [games.g.addons."audio"]
         source = "github:rusty-key/spoken-wow"
         """;
 
-    assertThat(ConfigEditor.removeAddon(original, "spoken"))
+    assertThat(ConfigEditor.removeAddon(original, "g", "spoken"))
         .hasValue(
             """
             # my addons
             [settings]
             addons_dir = "Interface/AddOns"
             # cache_dir = "cache"
-            [addons.questie]
+            [games.g.addons.questie]
             source = "github:Questie/Questie"
 
             # sound packs
-            [addons."audio"]
+            [games.g.addons."audio"]
             source = "github:rusty-key/spoken-wow"
             """);
     // A comment glued to the end of the previous table may be about that table: it stays.
-    assertThat(ConfigEditor.removeAddon(original, "questie"))
+    assertThat(ConfigEditor.removeAddon(original, "g", "questie"))
         .hasValueSatisfying(text ->
             assertThat(text)
                 .contains("# cache_dir = \"cache\"\n\n# the voice-over player")
                 .doesNotContain("Questie"));
-    assertThat(ConfigEditor.removeAddon(original, "audio"))
+    assertThat(ConfigEditor.removeAddon(original, "g", "audio"))
         .hasValueSatisfying(text ->
             assertThat(text).endsWith("post_install = [\"echo hi\"]\n").doesNotContain("sound"));
   }
 
   @Test
   void removingTheOnlyAddonLeavesTheRest() {
-    assertThat(ConfigEditor.removeAddon("[addons.a]\nsource = \"o/a\"\n", "a")).hasValue("");
+    assertThat(ConfigEditor.removeAddon("[games.g.addons.a]\nsource = \"o/a\"\n", "g", "a"))
+        .hasValue("");
     assertThat(
             ConfigEditor.removeAddon(
-                "[settings]\ncache_dir = \"c\"\n\n\n[addons.a]\nsource = \"o/a\"\n", "a"))
+                "[settings]\ncache_dir = \"c\"\n\n\n[games.g.addons.a]\nsource = \"o/a\"\n",
+                "g",
+                "a"))
         .hasValue("[settings]\ncache_dir = \"c\"\n");
   }
 
   @Test
   void anAddonThatIsNotATableCannotBeRemoved() {
-    assertThat(ConfigEditor.removeAddon("[addons]\na = { source = \"o/a\" }\n", "a")).isEmpty();
-    assertThat(ConfigEditor.removeAddon("[addons.ab]\nsource = \"o/a\"\n", "a")).isEmpty();
+    assertThat(ConfigEditor.removeAddon("[games.g.addons]\na = { source = \"o/a\" }\n", "g", "a"))
+        .isEmpty();
+    assertThat(ConfigEditor.removeAddon("[games.g.addons.ab]\nsource = \"o/a\"\n", "g", "a"))
+        .isEmpty();
   }
 
   @HegelTest
   void removingOneAddonKeepsEveryOther(TestCase tc) {
     int count = tc.draw(Generators.integers().min(1).max(5), "count");
-    var toml = new StringBuilder("[settings]\ncache_dir = \"c\"\n");
+    var toml = new StringBuilder("[settings]\ncache_dir = \"c\"\n\n[games.g]\ndir = \"/g\"\n");
     for (int i = 0; i < count; i++) {
       if (tc.draw(Generators.booleans(), "comment")) {
         toml.append(tc.draw(Generators.booleans(), "blank") ? "\n" : "")
@@ -187,18 +196,18 @@ final class ConfigEditorTest {
       } else {
         toml.append('\n');
       }
-      toml.append("[addons.a")
+      toml.append("[games.g.addons.a")
           .append(i)
           .append("]\nsource = \"github:o/a")
           .append(i)
           .append("\"\n");
       if (tc.draw(Generators.booleans(), "hooks")) {
-        toml.append("[addons.a").append(i).append(".hooks]\npost_install = [\"true\"]\n");
+        toml.append("[games.g.addons.a").append(i).append(".hooks]\npost_install = [\"true\"]\n");
       }
     }
     int gone = tc.draw(Generators.integers().min(0).max(count - 1), "gone");
 
-    var edited = ConfigEditor.removeAddon(toml.toString(), "a" + gone);
+    var edited = ConfigEditor.removeAddon(toml.toString(), "g", "a" + gone);
 
     assertThat(edited).isPresent();
     var before = parse(toml.toString()).addons();
@@ -207,5 +216,85 @@ final class ConfigEditorTest {
     expected.remove("a" + gone);
     assertThat(after).containsExactlyEntriesOf(expected);
     assertThat(edited.orElseThrow()).doesNotContain("\n\n\n");
+  }
+
+  @Test
+  void anAddedTableJoinsItsGame() {
+    var toml =
+        """
+        [games.a]
+        dir = "/a"
+
+        [games.a.addons.x]
+        source = "github:o/x"
+
+        # the other game
+        [games.b]
+        dir = "/b"
+        """;
+    var table = "[games.a.addons.y]\nsource = \"github:o/y\"\n";
+
+    assertThat(ConfigEditor.appendToGame(toml, "a", table))
+        .isEqualTo(
+            """
+            [games.a]
+            dir = "/a"
+
+            [games.a.addons.x]
+            source = "github:o/x"
+
+            [games.a.addons.y]
+            source = "github:o/y"
+
+            # the other game
+            [games.b]
+            dir = "/b"
+            """);
+    assertThat(ConfigEditor.appendToGame(toml, "b", table.replace("games.a", "games.b")))
+        .endsWith("dir = \"/b\"\n\n[games.b.addons.y]\nsource = \"github:o/y\"\n");
+  }
+
+  @Test
+  void setsTheDefaultGameOnce() {
+    assertThat(ConfigEditor.setDefaultGame("# mine\n\n[games.a]\ndir = \"/a\"\n", "a"))
+        .isEqualTo("# mine\n\n[settings]\ndefault_game = \"a\"\n\n[games.a]\ndir = \"/a\"\n");
+    var withSettings = "[settings]\ncache_dir = \"c\"\n";
+    assertThat(ConfigEditor.setDefaultGame(withSettings, "a"))
+        .isEqualTo("[settings]\ndefault_game = \"a\"\ncache_dir = \"c\"\n");
+    var set = "[settings]\ndefault_game = \"b\"\n";
+    assertThat(ConfigEditor.setDefaultGame(set, "a")).isEqualTo(set);
+  }
+
+  @Test
+  void importsTheAddonsOfAnOldFileUnderAGame() {
+    var old =
+        """
+        [settings]
+        addons_dir = "Interface/AddOns"   # next to this file
+
+        # quests
+        [addons.questie]
+        source = "github:Questie/Questie"
+        tag_prefix = "bundle/"   # the plain tags stopped
+
+        [addons.questie.hooks]
+        post_install = "echo hi"
+
+        # review everything
+        [hooks]
+        pre_install = "./review.sh"
+        """;
+
+    assertThat(ConfigEditor.importOldLayout(old, "forever"))
+        .isEqualTo(
+            """
+            # quests
+            [games.forever.addons.questie]
+            source = "github:Questie/Questie"
+            tag_prefix = "bundle/"   # the plain tags stopped
+
+            [games.forever.addons.questie.hooks]
+            post_install = "echo hi"
+            """);
   }
 }

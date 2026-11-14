@@ -4,6 +4,7 @@ import io.github.tinnet.wowfam.config.Config;
 import io.github.tinnet.wowfam.config.ConfigEditor;
 import io.github.tinnet.wowfam.config.ConfigException;
 import io.github.tinnet.wowfam.config.ConfigLoader;
+import io.github.tinnet.wowfam.config.Workspace;
 import io.github.tinnet.wowfam.install.Installer;
 import io.github.tinnet.wowfam.lock.LockFile;
 import java.io.IOException;
@@ -46,13 +47,20 @@ final class RemoveCommand implements Callable<Integer> {
 
   @Override
   public Integer call() {
-    var config = root.loadConfig();
-    var lock = LockFile.read(config.lockFile());
+    var config = root.oneGame(root.loadWorkspace());
+    var lock = LockFile.read(config.lockFile(), config.name());
     var names = new LinkedHashSet<>(addons);
     for (var name : names) {
       if (!config.addons().containsKey(name) && lock.get(name).isEmpty()) {
         throw new ConfigException(
-            "no addon named '" + name + "' in " + config.file() + " or " + lock.path());
+            "no addon named '"
+                + name
+                + "' in game "
+                + config.name()
+                + " of "
+                + config.file()
+                + " or "
+                + lock.path());
       }
     }
     for (var other : config.addons().values()) {
@@ -73,7 +81,7 @@ final class RemoveCommand implements Callable<Integer> {
         }
       }
     }
-    var edited = withoutEntries(config, names);
+    var edited = withoutEntries(root.loader(), config, names);
 
     var out = spec.commandLine().getOut();
     if (dryRun) {
@@ -84,7 +92,7 @@ final class RemoveCommand implements Callable<Integer> {
                     "would uninstall %s %s  (%s)%n",
                     name, e.version(), String.join(", ", e.folders())));
         if (config.addons().containsKey(name)) {
-          out.printf("would remove addons.%s from %s%n", name, config.file());
+          out.printf("would remove %s from game %s in %s%n", name, config.name(), config.file());
         }
       }
       return 0;
@@ -110,7 +118,8 @@ final class RemoveCommand implements Callable<Integer> {
     Reports.print(spec, new Installer.Report(outcomes, Map.of()));
     names.stream()
         .filter(config.addons()::containsKey)
-        .forEach(name -> out.printf("removed addons.%s from %s%n", name, config.file()));
+        .forEach(name ->
+            out.printf("removed %s from game %s in %s%n", name, config.name(), config.file()));
     return 0;
   }
 
@@ -118,7 +127,7 @@ final class RemoveCommand implements Callable<Integer> {
    * The text of wowfam.toml without the named entries, checked by parsing it: every other addon,
    * the settings and the hooks must come out exactly as before.
    */
-  private static String withoutEntries(Config config, Iterable<String> names) {
+  private static String withoutEntries(ConfigLoader loader, Config config, Iterable<String> names) {
     var original = read(config);
     var text = original;
     for (var name : names) {
@@ -126,26 +135,29 @@ final class RemoveCommand implements Callable<Integer> {
         continue;
       }
       text =
-          ConfigEditor.removeAddon(text, name)
+          ConfigEditor.removeAddon(text, config.name(), name)
               .orElseThrow(() ->
                   new ConfigException(
-                      "cannot find the [addons."
+                      "cannot find the [games."
+                          + config.name()
+                          + ".addons."
                           + name
                           + "] table in "
                           + config.file()
                           + "; take the entry out by hand"));
     }
-    var loader = new ConfigLoader();
     var before = loader.parse(config.file(), original);
     var after = loader.parse(config.file(), text);
-    var expected = new LinkedHashMap<>(before.addons());
-    names.forEach(expected::remove);
-    if (!after.addons().equals(expected)
-        || !after.settings().equals(before.settings())
-        || !after.hooks().equals(before.hooks())) {
+    var expected = new LinkedHashMap<>(before.games());
+    var game = before.game(config.name());
+    var addons = new LinkedHashMap<>(game.addons());
+    names.forEach(addons::remove);
+    expected.put(
+        game.name(), new Config(game.file(), game.name(), game.settings(), game.hooks(), addons));
+    if (!after.equals(new Workspace(before.file(), before.defaultGame(), expected))) {
       throw new ConfigException(
-          "cannot remove addons."
-              + String.join(", addons.", names)
+          "cannot remove "
+              + String.join(", ", names)
               + " from "
               + config.file()
               + " without changing other entries; take it out by hand");

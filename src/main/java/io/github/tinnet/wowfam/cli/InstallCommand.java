@@ -39,10 +39,6 @@ final class InstallCommand implements Callable<Integer> {
 
   @Override
   public Integer call() {
-    var config = root.loadConfig();
-    return Reports.print(
-        spec,
-        new Installer(root.backends(config), spec.commandLine().getOut()::println, !noHooks)
-            .run(config, addons, Installer.Mode.INSTALL, force));
+    return Reports.runGames(root, spec, addons, Installer.Mode.INSTALL, force, !noHooks);
   }
 }

@@ -17,33 +17,49 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.dataformat.toml.TomlMapper;
 
 /**
- * {@code wowfam.lock}, beside {@code wowfam.toml}: the exact release installed for each addon and
- * the folders it put in the AddOns directory. Like {@code mise.lock}, {@code install} reproduces it
- * and {@code update} moves it forward.
+ * {@code wowfam.lock}, beside {@code wowfam.toml}: for each game, the exact release installed for
+ * each addon and the folders it put in the AddOns directory. Like {@code mise.lock}, {@code
+ * install} reproduces it and {@code update} moves it forward.
+ *
+ * <p>An instance is one game's part of the file; {@link #write} keeps the other games' entries as
+ * they were read.
  */
 public final class LockFile {
 
   private static final TomlMapper TOML = TomlMapper.builder().build();
 
   private final Path path;
+  private final String game;
   private final Map<String, LockEntry> entries;
+  private final Map<String, Map<String, LockEntry>> otherGames;
 
   /** Whether the text this was parsed from is in an older format than {@link #toToml} writes. */
   private final boolean outdatedFormat;
 
-  private LockFile(Path path, Map<String, LockEntry> entries, boolean outdatedFormat) {
+  private LockFile(
+      Path path,
+      String game,
+      Map<String, LockEntry> entries,
+      Map<String, Map<String, LockEntry>> otherGames,
+      boolean outdatedFormat) {
     this.path = path;
+    this.game = game;
     this.entries = new TreeMap<>(entries);
+    this.otherGames = new TreeMap<>(otherGames);
+    this.otherGames.remove(game);
     this.outdatedFormat = outdatedFormat;
   }
 
-  /** Reads the lock file, rewriting it in the current format if it is in an older one. */
-  public static LockFile read(Path path) {
+  /**
+   * Reads {@code game}'s part of the lock file, rewriting the file in the current format if it is
+   * in an older one.
+   */
+  public static LockFile read(Path path, String game) {
     if (!Files.exists(path)) {
-      return new LockFile(path, Map.of(), false);
+      return new LockFile(path, game, Map.of(), Map.of(), false);
     }
     try {
-      var lock = parse(path, Files.readString(path));
+      var lock = parse(path, game, Files.readString(path));
       if (lock.outdatedFormat) {
         lock.write();
       }
@@ -53,16 +69,51 @@ public final class LockFile {
     }
   }
 
-  static LockFile parse(Path path, String toml) {
-    JsonNode root;
+  static LockFile parse(Path path, String game, String toml) {
+    var root = tree(path, toml);
+    if (root.has("addons")) {
+      throw new LockFileException(
+          path
+              + " is from before wowfam.toml held several games; wowfam init --import moves it"
+              + " along with its wowfam.toml");
+    }
+    var games = new TreeMap<String, Map<String, LockEntry>>();
+    boolean outdatedFormat = false;
+    for (var g : root.path("games").properties()) {
+      var parsed = new Parsed();
+      games.put(g.getKey(), entries(path, g.getValue().path("addons"), parsed));
+      outdatedFormat |= parsed.outdatedFormat;
+    }
+    return new LockFile(path, game, games.getOrDefault(game, Map.of()), games, outdatedFormat);
+  }
+
+  /**
+   * The entries of a {@code wowfam.lock} from before games (a top-level {@code [addons]}), for
+   * {@code init --import}.
+   */
+  public static Map<String, LockEntry> readOldLayout(Path path) {
     try {
-      root = TOML.readTree(toml);
+      return entries(path, tree(path, Files.readString(path)).path("addons"), new Parsed());
+    } catch (IOException e) {
+      throw new LockFileException("cannot read " + path + ": " + e.getMessage(), e);
+    }
+  }
+
+  private static final class Parsed {
+    boolean outdatedFormat;
+  }
+
+  private static JsonNode tree(Path path, String toml) {
+    try {
+      return TOML.readTree(toml);
     } catch (JacksonException e) {
       throw new LockFileException("invalid lock file " + path + ": " + e.getOriginalMessage(), e);
     }
+  }
+
+  private static Map<String, LockEntry> entries(Path path, JsonNode addons, Parsed parsed) {
     var entries = new TreeMap<String, LockEntry>();
-    boolean outdatedFormat = false;
-    for (var e : root.path("addons").properties()) {
+    for (var e : addons.properties()) {
       var n = e.getValue();
       var folders = new ArrayList<String>();
       n.path("folders").forEach(f -> folders.add(f.asString()));
@@ -82,7 +133,7 @@ public final class LockFile {
       } else if (n.path("sha256").isString()) {
         // Before the algorithm was recorded, the only digest was `sha256 = "<hex>"`.
         checksum = Checksum.parse(Checksum.SHA256 + ":" + n.path("sha256").asString());
-        outdatedFormat = true;
+        parsed.outdatedFormat = true;
       }
       entries.put(
           e.getKey(),
@@ -95,7 +146,7 @@ public final class LockFile {
               checksum,
               folders));
     }
-    return new LockFile(path, entries, outdatedFormat);
+    return entries;
   }
 
   public Path path() {
@@ -129,23 +180,29 @@ public final class LockFile {
         .toList();
   }
 
-  /** One {@code [addons.<name>]} table per addon, sorted by name, so diffs stay small. */
+  /**
+   * One {@code [games.<game>.addons.<name>]} table per addon, sorted by game and name, so diffs
+   * stay small.
+   */
   public String toToml() {
+    var all = new TreeMap<String, Map<String, LockEntry>>(otherGames);
+    all.put(game, entries);
     var sb =
         new StringBuilder(
             "# Generated by wowfam. Records what is installed; commit it to reproduce an install.\n");
-    entries.forEach((name, e) -> {
-      sb.append("\n[addons.").append(key(name)).append("]\n");
-      line(sb, "source", e.source());
-      line(sb, "version", e.version());
-      line(sb, "tag", e.tag());
-      line(sb, "asset", e.asset());
-      line(sb, "url", e.url());
-      e.checksum().ifPresent(c -> line(sb, "checksum", c.toString()));
-      sb.append("folders = [")
-          .append(String.join(", ", e.folders().stream().map(LockFile::string).toList()))
-          .append("]\n");
-    });
+    all.forEach((g, addons) ->
+        addons.forEach((name, e) -> {
+          sb.append("\n[games.").append(key(g)).append(".addons.").append(key(name)).append("]\n");
+          line(sb, "source", e.source());
+          line(sb, "version", e.version());
+          line(sb, "tag", e.tag());
+          line(sb, "asset", e.asset());
+          line(sb, "url", e.url());
+          e.checksum().ifPresent(c -> line(sb, "checksum", c.toString()));
+          sb.append("folders = [")
+              .append(String.join(", ", e.folders().stream().map(LockFile::string).toList()))
+              .append("]\n");
+        }));
     return sb.toString();
   }
 

@@ -7,8 +7,8 @@ How wowfam works inside. The [README](../README.md) describes what it does for u
 
 | Package       | What                                                                                  |
 |---------------|---------------------------------------------------------------------------------------|
-| `cli`         | picocli commands (`add`, `install`, `update`, `list`, `outdated`), output tables      |
-| `config`      | `wowfam.toml` model, loader and text editor; game detection                           |
+| `cli`         | picocli commands (`init`, `add`, `remove`, `install`, `update`, `list`, `outdated`), output tables |
+| `config`      | `wowfam.toml` model, loader and text editor; finding WoW installs; game detection     |
 | `backend`     | the `Backend` interface, release selection, HTTP; `backend.github` is GitHub releases |
 | `install`     | download → verify → unpack → swap folders; zip-slip-safe extraction; `.toc` parsing; hooks |
 | `lock`        | `wowfam.lock`                                                                         |
@@ -89,11 +89,43 @@ The GitHub backend works out options the way one would by reading the release pa
   exactly one asset of that release.
 - No `asset` is needed when the release has a `release.json` and the game is known.
 
-The entry is appended to `wowfam.toml` as text (`ConfigEditor`), so comments and layout survive;
+The entry is added to `wowfam.toml` as text (`ConfigEditor`), after the game's last table, so
+comments and layout survive;
 the result is parsed before it is written, and written by atomic rename. If the install fails and
 the addon didn't make it into the lock (a failed download, a `pre_install` hook saying no), the
 file is restored. If it is in the lock (only `post_install` failed), the entry stays, so the
 config and the lock agree.
+
+## Config and games
+
+There is one `wowfam.toml` per user, in the user's config folder (`WowfamCommand.defaultConfigFile`:
+`$WOWFAM_CONFIG`, else `$XDG_CONFIG_HOME/wowfam`, `~/.config/wowfam`, or `%APPDATA%\wowfam` on
+Windows); the current directory plays no part, since a player has no reason to be in their game
+folder. `ConfigLoader` parses it into a `Workspace`: the default game and one `Config` per
+`[games.<name>]`, which is what the installer works on (its AddOns folder, cache and hooks, and its
+addons). Commands over addons run once per selected game; `add` and `remove` pick one
+(`Workspace.one`: `--game`, else `default_game`, else the only game).
+
+Each game's addons are their own tables rather than one list of addons with a `games` key per
+entry: a game's section then reads as its AddOns folder, per-game differences (a version pinned for
+one game) need no overrides, and `add`, `remove` and the lock all work on one game's tables. The
+price is listing an addon twice for two games.
+
+`wowfam.lock` keeps the same split (`[games.<name>.addons.<addon>]`). A `LockFile` is one game's
+part; writing it rewrites the file with the other games' entries as they were read.
+
+`init` (`WowInstalls`) looks where the launcher installs: the registry's `InstallPath` and the
+usual folders on each drive on Windows, `/Applications` on macOS, and on Linux the `drive_c` of
+Wine prefixes: `~/Games/*` and the `prefix:` of Lutris' game YAML, `~/.wine`, Steam's
+`compatdata/*/pfx` (native and Flatpak), Bottles (native and Flatpak), Heroic and Faugus. A game
+folder is a child of the install named `_<something>_` with a `.flavor.info` or an `Interface`
+folder; it is named after the folder (`_classic_era_` → `classic_era`). Paths under the home
+folder are written as `~/…`, so the file can live in dotfiles.
+
+A `wowfam.toml` from before (one AddOns folder, top-level `[addons]`) is refused with a pointer to
+`init --import`, which moves its addon tables under a game as text (comments kept), checks by
+parsing that every addon arrived, and moves its lock entries when the old file installed into the
+same AddOns folder.
 
 ## Game detection
 
@@ -106,7 +138,7 @@ World of Warcraft/_forever_/Interface/AddOns
 ```
 
 Both files are the launcher's BPSV format: a header of `Name!TYPE:size` columns, then rows, all
-separated by `|`. `Game.detect` walks up from `addons_dir` to the first `.flavor.info`, reads the
+separated by `|`. `Game.detect` walks up from the game's AddOns folder to the first `.flavor.info`, reads the
 product, and takes that product's active row from `.build.info` next to the game folder. The
 version's first three numbers give the interface number addons declare in `## Interface`:
 `major * 10000 + minor * 100 + patch` (1.60.1 → `16001`, 12.1.5 → `120105`).

@@ -19,7 +19,7 @@ final class LockFileTest {
   @Test
   void roundTripsThroughToml(@TempDir Path tmp) {
     var path = tmp.resolve("wowfam.lock");
-    var lock = LockFile.read(path);
+    var lock = LockFile.read(path, "g");
     assertThat(lock.entries()).isEmpty();
 
     var spoken =
@@ -44,7 +44,7 @@ final class LockFileTest {
     lock.put("spoken-readables-audio", audio);
     lock.write();
 
-    var reread = LockFile.read(path);
+    var reread = LockFile.read(path, "g");
     assertThat(reread.entries())
         .containsEntry("spoken", spoken)
         .containsEntry("spoken-readables-audio", audio);
@@ -54,7 +54,7 @@ final class LockFileTest {
 
   @Test
   void writesOneTablePerAddon(@TempDir Path tmp) {
-    var lock = LockFile.read(tmp.resolve("wowfam.lock"));
+    var lock = LockFile.read(tmp.resolve("wowfam.lock"), "g");
     lock.put(
         "spoken",
         new LockEntry(
@@ -66,13 +66,13 @@ final class LockFileTest {
             Optional.empty(),
             List.of("A")));
     assertThat(lock.toToml())
-        .contains("[addons.spoken]\nsource = \"github:o/r\"\n")
+        .contains("[games.g.addons.spoken]\nsource = \"github:o/r\"\n")
         .contains("folders = [\"A\"]");
   }
 
   @Test
   void writesTheChecksumWithItsAlgorithm(@TempDir Path tmp) {
-    var lock = LockFile.read(tmp.resolve("wowfam.lock"));
+    var lock = LockFile.read(tmp.resolve("wowfam.lock"), "g");
     lock.put(
         "a",
         new LockEntry(
@@ -92,7 +92,7 @@ final class LockFileTest {
     Files.writeString(
         path,
         """
-        [addons.spoken]
+        [games.g.addons.spoken]
         source = "github:rusty-key/spoken-wow"
         version = "3.8.5"
         tag = "spoken/v3.8.5"
@@ -101,7 +101,7 @@ final class LockFileTest {
         sha256 = "%s"
         folders = ["Spoken"]
 
-        [addons.undigested]
+        [games.g.addons.undigested]
         source = "github:o/r"
         version = "1.0.0"
         tag = "v1.0.0"
@@ -111,7 +111,7 @@ final class LockFileTest {
         """
             .formatted("ab".repeat(32)));
 
-    var lock = LockFile.read(path);
+    var lock = LockFile.read(path, "g");
 
     assertThat(lock.get("spoken"))
         .hasValueSatisfying(
@@ -131,7 +131,7 @@ final class LockFileTest {
     var text =
         """
         # hand-edited, and not how wowfam would lay it out
-        [addons.a]
+        [games.g.addons.a]
         folders = ["A"]
         checksum = "sha256:%s"
         source = "github:o/r"
@@ -143,7 +143,7 @@ final class LockFileTest {
             .formatted("cd".repeat(32));
     Files.writeString(path, text);
 
-    assertThat(LockFile.read(path).get("a"))
+    assertThat(LockFile.read(path, "g").get("a"))
         .hasValueSatisfying(
             e -> assertThat(e.checksum()).hasValue(Checksum.sha256("cd".repeat(32))));
     assertThat(path).hasContent(text);
@@ -154,8 +154,9 @@ final class LockFileTest {
     assertThatThrownBy(() ->
             LockFile.parse(
                 Path.of("wowfam.lock"),
+                "g",
                 """
-                [addons.a]
+                [games.g.addons.a]
                 source = "github:o/r"
                 checksum = "abcdef"
                 """))
@@ -185,9 +186,50 @@ final class LockFileTest {
             tc.draw(text, "url"),
             tc.draw(Generators.optional(checksums()), "checksum"),
             tc.draw(Generators.lists(text).maxSize(3), "folders"));
-    var lock = LockFile.parse(Path.of("wowfam.lock"), "");
+    var lock = LockFile.parse(Path.of("wowfam.lock"), "g", "");
     lock.put(name, entry);
 
-    assertThat(LockFile.parse(Path.of("wowfam.lock"), lock.toToml()).get(name)).hasValue(entry);
+    assertThat(LockFile.parse(Path.of("wowfam.lock"), "g", lock.toToml()).get(name))
+        .hasValue(entry);
+  }
+
+  @Test
+  void eachGameKeepsItsOwnEntries(@TempDir Path tmp) {
+    var path = tmp.resolve("wowfam.lock");
+    var entry =
+        new LockEntry(
+            "github:o/r", "1", "v1", "A.zip", "https://x/A.zip", Optional.empty(), List.of("A"));
+    var retail = LockFile.read(path, "retail");
+    retail.put("a", entry);
+    retail.write();
+    var classic = LockFile.read(path, "classic");
+    assertThat(classic.get("a")).isEmpty();
+    assertThat(classic.owners("A")).isEmpty();
+    classic.put("b", entry);
+    classic.write();
+
+    assertThat(LockFile.read(path, "retail").entries()).containsOnlyKeys("a");
+    assertThat(LockFile.read(path, "classic").entries()).containsOnlyKeys("b");
+    assertThat(path).content().contains("[games.classic.addons.b]", "[games.retail.addons.a]");
+  }
+
+  @Test
+  void anOldSingleGameLockIsReadOnlyForAnImport(@TempDir Path tmp) throws Exception {
+    var path = tmp.resolve("wowfam.lock");
+    Files.writeString(
+        path,
+        """
+        [addons.a]
+        source = "github:o/r"
+        version = "1"
+        tag = "v1"
+        asset = "A.zip"
+        url = "https://x/A.zip"
+        folders = ["A"]
+        """);
+    assertThatThrownBy(() -> LockFile.read(path, "g"))
+        .isInstanceOf(LockFileException.class)
+        .hasMessageContaining("wowfam init --import");
+    assertThat(LockFile.readOldLayout(path)).containsOnlyKeys("a");
   }
 }

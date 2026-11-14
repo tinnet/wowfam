@@ -15,7 +15,10 @@ import java.util.regex.Pattern;
  */
 public final class ConfigEditor {
 
-  /** Addon names that can be a bare TOML key, and so be written {@code [addons.<name>]}. */
+  /**
+   * Game and addon names that can be a bare TOML key, and so be written {@code
+   * [games.<game>.addons.<name>]}.
+   */
   public static final Pattern NAME = Pattern.compile("[A-Za-z0-9_-]+");
 
   /** Options written in this order after {@code source} and {@code version}; others follow. */
@@ -24,13 +27,18 @@ public final class ConfigEditor {
 
   private ConfigEditor() {}
 
-  /** The {@code [addons.<name>]} table for {@code spec}, ending in a newline. */
-  public static String addonTable(AddonSpec spec) {
+  /** The {@code [games.<game>.addons.<name>]} table for {@code spec}, ending in a newline. */
+  public static String addonTable(String game, AddonSpec spec) {
     if (!NAME.matcher(spec.name()).matches()) {
       throw new ConfigException(
           "'" + spec.name() + "' cannot be an addon name: use letters, digits, - and _");
     }
-    var table = new StringBuilder("[addons.").append(spec.name()).append("]\n");
+    var table =
+        new StringBuilder("[games.")
+            .append(game)
+            .append(".addons.")
+            .append(spec.name())
+            .append("]\n");
     line(table, "source", spec.source().toString());
     line(table, "version", spec.version());
     var keys = new ArrayList<>(OPTION_ORDER);
@@ -44,6 +52,17 @@ public final class ConfigEditor {
     return table.toString();
   }
 
+  /** The {@code [games.<name>]} table for a game in {@code dir}, ending in a newline. */
+  public static String gameTable(String name, String dir) {
+    if (!NAME.matcher(name).matches()) {
+      throw new ConfigException(
+          "'" + name + "' cannot be a game name: use letters, digits, - and _");
+    }
+    var table = new StringBuilder("[games.").append(name).append("]\n");
+    line(table, "dir", dir);
+    return table.toString();
+  }
+
   /** {@code toml} with {@code table} appended after a blank line. */
   public static String append(String toml, String table) {
     if (toml.isBlank()) {
@@ -54,23 +73,160 @@ public final class ConfigEditor {
   }
 
   /**
-   * {@code toml} without the {@code [addons.<name>]} table, its sub-tables (such as {@code
-   * [addons.<name>.hooks]}) and the comment lines directly above them. Empty if the file doesn't
-   * hold the addon as such a table (an inline table, or dotted keys under {@code [addons]}).
+   * {@code toml} with {@code table} after the last table of {@code game} (so a game's addons stay
+   * together), or at the end if the game has none.
+   */
+  public static String appendToGame(String toml, String game, String table) {
+    var own = header("games", game);
+    var lines = List.of(toml.split("\n", -1));
+    int last = -1;
+    for (int i = 0; i < lines.size(); i++) {
+      if (own.matcher(lines.get(i)).matches()) {
+        last = i;
+      }
+    }
+    if (last < 0) {
+      return append(toml, table);
+    }
+    int end = last + 1;
+    while (end < lines.size() && !isHeader(lines.get(end))) {
+      end++;
+    }
+    if (end == lines.size()) {
+      return append(toml, table);
+    }
+    // Before the comments and blank lines that lead up to the next table.
+    int at = end;
+    while (at - 1 > last && isComment(lines.get(at - 1))) {
+      at--;
+    }
+    while (at - 1 > last && lines.get(at - 1).isBlank()) {
+      at--;
+    }
+    return String.join("\n", lines.subList(0, at))
+        + "\n\n"
+        + table
+        + "\n"
+        + String.join("\n", lines.subList(at, lines.size())).stripLeading();
+  }
+
+  /**
+   * {@code toml} with {@code settings.default_game} set to {@code game}, if it has no default game
+   * yet; unchanged otherwise.
+   */
+  public static String setDefaultGame(String toml, String game) {
+    var settings = header("settings");
+    var lines = new ArrayList<>(List.of(toml.split("\n", -1)));
+    for (int i = 0; i < lines.size(); i++) {
+      if (settings.matcher(lines.get(i)).matches()) {
+        for (int j = i + 1; j < lines.size() && !isHeader(lines.get(j)); j++) {
+          if (lines.get(j).strip().startsWith("default_game")) {
+            return toml;
+          }
+        }
+        var entry = new StringBuilder();
+        line(entry, "default_game", game);
+        lines.add(i + 1, entry.toString().stripTrailing());
+        return String.join("\n", lines);
+      }
+    }
+    var table = new StringBuilder("[settings]\n");
+    line(table, "default_game", game);
+    // Before the first table, and the comments right above it.
+    int first = 0;
+    while (first < lines.size() && !isHeader(lines.get(first))) {
+      first++;
+    }
+    while (first > 0 && isComment(lines.get(first - 1))) {
+      first--;
+    }
+    if (first >= lines.size() || toml.isBlank()) {
+      return append(toml, table.toString());
+    }
+    return String.join("\n", lines.subList(0, first))
+        + (first == 0 ? "" : "\n")
+        + table
+        + "\n"
+        + String.join("\n", lines.subList(first, lines.size()));
+  }
+
+  /**
+   * The addon tables of a {@code wowfam.toml} from before games ({@code [addons.<name>]} and their
+   * sub-tables, with the comments right above them), moved under {@code [games.<game>]}. Its {@code
+   * [settings]} and {@code [hooks]} are left out.
+   */
+  public static String importOldLayout(String toml, String game) {
+    var addon = Pattern.compile("(\\s*\\[)\\s*addons\\s*\\.");
+    var lines = List.of(toml.split("\n", -1));
+    var out = new StringBuilder();
+    for (int i = 0; i < lines.size(); i++) {
+      var m = addon.matcher(lines.get(i));
+      if (!m.lookingAt()) {
+        continue;
+      }
+      int top = i;
+      while (top > 0 && isComment(lines.get(top - 1))) {
+        top--;
+      }
+      int end = i + 1;
+      while (end < lines.size() && !isHeader(lines.get(end))) {
+        end++;
+      }
+      if (!out.isEmpty()) {
+        out.append('\n');
+      }
+      for (int j = top; j < i; j++) {
+        out.append(lines.get(j)).append('\n');
+      }
+      out.append(m.replaceFirst("$1games." + game + ".addons.")).append('\n');
+      var body = String.join("\n", lines.subList(i + 1, end)).strip();
+      // Comments at the end of a block lead up to the next table; they come with it.
+      var bodyLines = new ArrayList<>(List.of(body.split("\n", -1)));
+      while (!bodyLines.isEmpty()
+          && (isComment(bodyLines.getLast()) || bodyLines.getLast().isBlank())) {
+        bodyLines.removeLast();
+      }
+      for (var l : bodyLines) {
+        out.append(l).append('\n');
+      }
+      i = end - 1;
+    }
+    return out.toString();
+  }
+
+  /**
+   * {@code toml} without the {@code [games.<game>.addons.<name>]} table, its sub-tables (such as
+   * {@code [games.<game>.addons.<name>.hooks]}) and the comment lines directly above them. Empty if
+   * the file doesn't hold the addon as such a table (an inline table, or dotted keys).
    *
    * <p>Works on lines, not a parse, so everything else stays as written. The caller should parse
    * the result to check that only the addon went.
    */
-  public static Optional<String> removeAddon(String toml, String name) {
-    var own =
-        Pattern.compile(
-            "\\s*\\[\\s*addons\\s*\\.\\s*(?:"
-                + Pattern.quote(name)
-                + "|\""
-                + Pattern.quote(name)
-                + "\"|'"
-                + Pattern.quote(name)
-                + "')\\s*(?:\\..*)?\\]\\s*(?:#.*)?");
+  public static Optional<String> removeAddon(String toml, String game, String name) {
+    return removeTables(toml, header("games", game, "addons", name));
+  }
+
+  /**
+   * The header lines of the table at {@code keys} and of its sub-tables, with each key bare or
+   * quoted.
+   */
+  private static Pattern header(String... keys) {
+    var re = new StringBuilder("\\s*\\[");
+    for (int i = 0; i < keys.length; i++) {
+      var k = Pattern.quote(keys[i]);
+      re.append(i == 0 ? "\\s*" : "\\s*\\.\\s*")
+          .append("(?:")
+          .append(k)
+          .append("|\"")
+          .append(k)
+          .append("\"|'")
+          .append(k)
+          .append("')");
+    }
+    return Pattern.compile(re.append("\\s*(?:\\..*)?\\]\\s*(?:#.*)?").toString());
+  }
+
+  private static Optional<String> removeTables(String toml, Pattern own) {
     var lines = List.of(toml.split("\n", -1));
     var drop = new boolean[lines.size()];
     boolean found = false;

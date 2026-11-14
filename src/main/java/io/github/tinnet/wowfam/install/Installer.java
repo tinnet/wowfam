@@ -89,8 +89,21 @@ public final class Installer {
 
   public Report run(Config config, List<String> names, Mode mode, boolean force) {
     var settings = config.settings();
-    var lock = LockFile.read(config.lockFile());
+    var lock = LockFile.read(config.lockFile(), config.name());
     var outcomes = new ArrayList<Outcome>();
+    var gameDir = settings.gameDir();
+    if (gameDir.isPresent() && !Files.isDirectory(gameDir.orElseThrow())) {
+      throw new InstallException(
+          "the folder of game "
+              + config.name()
+              + " is not there: "
+              + gameDir.orElseThrow()
+              + " (fix games."
+              + config.name()
+              + ".dir in "
+              + config.file()
+              + ")");
+    }
     try {
       Files.createDirectories(settings.addonsDir());
     } catch (IOException e) {
@@ -110,7 +123,7 @@ public final class Installer {
       // of wowfam.toml by hand is uninstalled.
       for (var name : List.copyOf(lock.entries().keySet())) {
         if (!config.addons().containsKey(name)) {
-          log.accept("uninstalling " + name + ", which is no longer in " + config.file());
+          log.accept("uninstalling " + name + ", which is no longer in game " + config.name());
           try {
             outcomes.add(uninstall(settings.addonsDir(), lock, name));
           } finally {
@@ -240,6 +253,7 @@ public final class Installer {
                     hooks.preInstall(),
                     hookEnv(
                         "pre_install",
+                        config.name(),
                         spec,
                         release,
                         previous,
@@ -264,7 +278,16 @@ public final class Installer {
           "post_install",
           spec.name(),
           hooks.postInstall(),
-          hookEnv("post_install", spec, release, previous, archive, addonsDir, addonsDir, folders));
+          hookEnv(
+              "post_install",
+              config.name(),
+              spec,
+              release,
+              previous,
+              archive,
+              addonsDir,
+              addonsDir,
+              folders));
     }
     var status =
         previous
@@ -280,6 +303,7 @@ public final class Installer {
   /** What a hook command learns about the installation, as environment variables. */
   static Map<String, String> hookEnv(
       String hook,
+      String game,
       AddonSpec spec,
       Release release,
       Optional<String> previousVersion,
@@ -289,6 +313,7 @@ public final class Installer {
       List<String> folders) {
     var env = new LinkedHashMap<String, String>();
     env.put("WOWFAM_HOOK", hook);
+    env.put("WOWFAM_GAME", game);
     env.put("WOWFAM_ADDON", spec.name());
     env.put("WOWFAM_SOURCE", spec.source().toString());
     env.put("WOWFAM_VERSION", release.version().toString());

@@ -1,14 +1,14 @@
 # wowfam
 
 Installs and updates World of Warcraft addons from a `wowfam.toml`, the way
-[mise](https://mise.jdx.dev) does for tools. You list the addons you want; wowfam downloads their
-releases from GitHub, unpacks them into `Interface/AddOns`, and keeps them up to date. Folders it
-didn't install are left alone, so it can sit next to addons you manage by hand.
+[mise](https://mise.jdx.dev) does for tools. You list the addons you want for each of your games;
+wowfam downloads their releases from GitHub, unpacks them into `Interface/AddOns`, and keeps them up
+to date. Folders it didn't install are left alone, so it can sit next to addons you manage by hand.
 
 ```console
 $ wowfam add https://github.com/fitzforge/polestar
-added to /…/World of Warcraft/_forever_/wowfam.toml:
-[addons.polestar]
+added to /home/me/.config/wowfam/wowfam.toml:
+[games.forever.addons.polestar]
 source = "github:fitzforge/polestar"
 version = "latest"
 asset = "Polestar-*.zip"
@@ -40,31 +40,44 @@ Or download the archive for your system from the
 
 ## Getting started
 
-Put a `wowfam.toml` in your game folder, the one that holds `Interface` (for example
-`World of Warcraft/_retail_` or `World of Warcraft/_classic_era_`):
-
-```toml
-[settings]
-addons_dir = "Interface/AddOns"   # relative to this file
+```console
+$ wowfam init
+found:
+  1  classic_era  ~/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft/_classic_era_
+  2  forever      ~/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft/_forever_
+add which? [all], numbers such as 1 3, none, or the path of another folder:
+default game for add and remove (classic_era, forever) [classic_era]: forever
+wrote /home/me/.config/wowfam/wowfam.toml
 ```
 
-Then, from that folder, add addons by pasting their GitHub page:
+`init` looks for World of Warcraft where the Battle.net launcher puts it: `Program Files` on
+Windows, `/Applications` on macOS, and on Linux the Wine prefixes of Lutris, Steam (Proton),
+Bottles, Heroic and Faugus. If it finds nothing, it asks for the folder; `wowfam init --dir <folder>`
+skips the search. Run it again after installing another game version to add that one.
+
+Then add addons by pasting their GitHub page, from any folder:
 
 ```sh
-cd "World of Warcraft/_retail_"
 wowfam add https://github.com/Questie/Questie
-wowfam add mooreatv/BetterVendorPrice
+wowfam add mooreatv/BetterVendorPrice -g classic_era   # to a game other than the default
 ```
 
 `add` reads the repository's releases, works out which tags and which zip are the addon, writes
 the entry to `wowfam.toml`, and installs it. Restart the game (not just `/reload`) to load newly
 installed addons.
 
-To run wowfam from somewhere else, point it at the file: `wowfam -C path/to/wowfam.toml update`.
+The config lives in `~/.config/wowfam/wowfam.toml` (`$XDG_CONFIG_HOME/wowfam`; `%APPDATA%\wowfam`
+on Windows), with `wowfam.lock` beside it. `$WOWFAM_CONFIG` or `-C FILE` points wowfam at another
+one.
+
+**Upgrading from a `wowfam.toml` in the game folder:** `wowfam init` notices it in a game folder
+it adds and moves its addons and lock over (`--import FILE` for one elsewhere). Its `[settings]`
+and `[hooks]` are not copied. Delete the old files afterwards.
 
 ## Commands
 
 ```sh
+wowfam init               # find your games and write wowfam.toml
 wowfam add <source>       # add an addon to wowfam.toml and install it
 wowfam install            # install everything in wowfam.toml (keeps the versions in wowfam.lock)
 wowfam install questie    # one addon, plus whatever it `depends` on
@@ -74,8 +87,10 @@ wowfam remove questie     # uninstall it and take it out of wowfam.toml
 wowfam list               # what is configured and what is installed
 ```
 
-`wowfam <command> --help` lists each command's options. Every command takes `-C FILE` (which
-`wowfam.toml` to use) and `--addons-dir DIR` (install somewhere else).
+`install`, `update`, `outdated` and `list` work on every game; `-g GAME` limits them to one. `add`
+and `remove` work on `settings.default_game` (or the only game) unless `-g` names another.
+`wowfam <command> --help` lists each command's options. Every command also takes `-C FILE` (which
+`wowfam.toml` to use) and `--addons-dir DIR` (install that game's addons somewhere else).
 
 ### `wowfam add`
 
@@ -105,19 +120,25 @@ of `wowfam.toml`, keeping the rest of the file as it is. `-n` shows what it woul
 while another entry `depends` on the addon.
 
 Editing `wowfam.toml` by hand works too: `wowfam install` and `wowfam update` without addon names
-uninstall whatever is in `wowfam.lock` but no longer in `wowfam.toml`. A renamed entry takes its
+uninstall whatever is in a game's part of `wowfam.lock` but no longer in its part of `wowfam.toml`. A renamed entry takes its
 folders over, and an entry moved to another source (a fork) drops folders only the old one had.
 
 ## wowfam.toml
 
-`add` writes these entries for you; this is what they mean if you want to edit them.
+`init` and `add` write these for you; this is what they mean if you want to edit them. Each game
+has a `[games.<name>]` table, and its addons are `[games.<name>.addons.<addon>]` tables. An addon
+you want in two games is listed in both.
 
 ```toml
 [settings]
-addons_dir = "Interface/AddOns"   # default: ./AddOns; relative to this file, ~ for your home
+default_game = "forever"          # the game add and remove use without -g
 # cache_dir = "~/.cache/wowfam"   # where downloaded zips are kept
 
-[addons.spoken]                   # a name of your choosing: letters, digits, - and _
+[games.forever]                   # a name of your choosing: letters, digits, - and _
+dir = "~/Games/World of Warcraft/_forever_"   # the game folder; ~ is your home
+# addons_dir = "/some/AddOns"     # instead of dir: an AddOns folder anywhere
+
+[games.forever.addons.spoken]     # also a name of your choosing
 source = "github:rusty-key/spoken-wow"
 version = "latest"                # "latest", exact "3.8.5", or a prefix like "3" / "3.8"
 tag_prefix = "spoken/"            # only tags starting with this (repositories with several projects)
@@ -125,14 +146,23 @@ asset = "Spoken-*.zip"            # which zip of a release (default "*.zip")
 # prerelease = true               # consider prereleases
 # flavor = "classic_era"          # the game to install for (see Game versions)
 
-[addons.spoken-bosses-audio]
+[games.forever.addons.spoken-bosses-audio]
 source = "github:rusty-key/spoken-wow"
 tag_prefix = "bosses-audio/"
 depends = ["spoken"]              # installed first, and pulled in by `install spoken-bosses-audio`
+
+[games.retail]
+dir = "~/Games/World of Warcraft/_retail_"
+
+[games.retail.addons.spoken]
+source = "github:rusty-key/spoken-wow"
+tag_prefix = "spoken/"
+asset = "Spoken-*.zip"
 ```
 
-A release zip may hold several addon folders; all of them are installed and belong to that entry.
-When an update drops a folder, wowfam removes it. Two entries can't install the same folder.
+Relative paths are relative to the folder holding `wowfam.toml`. A release zip may hold several
+addon folders; all of them are installed and belong to that entry. When an update drops a folder,
+wowfam removes it. Two entries of a game can't install the same folder.
 
 After installing, wowfam checks each addon's required dependencies (`## Dependencies` in its
 `.toc`) and warns about any that aren't in AddOns.
@@ -143,23 +173,22 @@ Many addons ship one zip that works on every game version. Some ship one per gam
 carry a `release.json` (written by the [BigWigs packager](https://github.com/BigWigsMods/packager))
 that says which zip is for which game.
 
-When `addons_dir` is inside a WoW install, wowfam knows which game it belongs to from the files
-the Battle.net launcher keeps there, and installs the right zip without any setting. That works
-wherever `wowfam.toml` itself lives. `wowfam list` shows what it found:
+wowfam knows which client a game folder holds from the files the Battle.net launcher keeps there,
+and installs the right zip without any setting. `wowfam list` shows what it found:
 
 ```
-game: wowf 1.60.1.70938 (interface 16001)
+forever: wowf 1.60.1.70938 (interface 16001), ~/Games/…/_forever_/Interface/AddOns
 ```
 
-`add` therefore writes no `asset` for such addons. If you point that `wowfam.toml` at an AddOns
-folder outside a WoW install (with `--addons-dir`, say), give them a `flavor`.
+`add` therefore writes no `asset` for such addons. For a game whose AddOns folder is outside a WoW
+install (an `addons_dir`, or `--addons-dir`), give them a `flavor`.
 
 After a game patch, an addon that hasn't put out a release for it yet gets the zip for the
 closest earlier version of the same expansion. An addon whose newest release no longer supports
 your game stays on its last release that did, and one that is installed but has no release for
 your game at all (after a new expansion) is left as it is.
 
-For an AddOns folder outside a WoW install, or to override what was detected, name the game per
+For an AddOns folder outside a WoW install, or to override what was detected, name the client per
 addon:
 
 ```toml
@@ -179,7 +208,7 @@ applies to every addon; an addon's own `hooks` run after it.
 pre_install = "./review-addon.sh"
 post_install = ["echo done", "notify-send wowfam \"$WOWFAM_ADDON $WOWFAM_VERSION\""]
 
-[addons.spoken]
+[games.forever.addons.spoken]
 source = "github:rusty-key/spoken-wow"
 hooks = { post_install = "./reload-ui-reminder.sh" }
 ```
@@ -195,6 +224,7 @@ skips them. They see these variables:
 | Variable                  | Value                                                                  |
 |---------------------------|------------------------------------------------------------------------|
 | `WOWFAM_HOOK`             | `pre_install` or `post_install`                                        |
+| `WOWFAM_GAME`             | the game's name in `wowfam.toml`, e.g. `forever`                       |
 | `WOWFAM_ADDON`            | the entry's name, e.g. `spoken`                                        |
 | `WOWFAM_SOURCE`           | e.g. `github:rusty-key/spoken-wow`                                     |
 | `WOWFAM_VERSION`, `WOWFAM_TAG` | the release being installed                                       |
@@ -236,9 +266,10 @@ Re-run with `--no-hooks` to install it anyway.
 
 ## wowfam.lock
 
-wowfam writes `wowfam.lock` next to `wowfam.toml`. It records which release of each addon is
-installed, the zip's checksum, and the folders it unpacked. `install` keeps those releases, so a
-second machine with the same two files gets the same addons; `update` moves to the newest ones.
+wowfam writes `wowfam.lock` next to `wowfam.toml`. It records, per game, which release of each
+addon is installed, the zip's checksum, and the folders it unpacked. `install` keeps those
+releases, so a second machine with the same two files gets the same addons; `update` moves to the
+newest ones. Keep both in your dotfiles if you like: `init` writes paths under your home as `~/…`.
 Downloads are checked against the checksum GitHub publishes.
 
 ## GitHub access and proxies

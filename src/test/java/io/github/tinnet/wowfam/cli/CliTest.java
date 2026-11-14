@@ -8,13 +8,16 @@ import io.github.tinnet.wowfam.WowInstall;
 import io.github.tinnet.wowfam.config.ConfigLoader;
 import io.github.tinnet.wowfam.config.Source;
 import io.github.tinnet.wowfam.lock.LockFile;
+import java.io.BufferedReader;
 import java.io.PrintWriter;
+import java.io.StringReader;
 import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,15 +46,17 @@ final class CliTest {
         config,
         """
         [settings]
-        addons_dir = "Interface/AddOns"
         cache_dir = "cache"
 
-        [addons.spoken]
+        [games.test]
+        addons_dir = "Interface/AddOns"
+
+        [games.test.addons.spoken]
         source = "github:rusty-key/spoken-wow"
         tag_prefix = "spoken/"
         asset = "Spoken-*.zip"
 
-        [addons.spoken-readables-audio]
+        [games.test.addons.spoken-readables-audio]
         source = "github:rusty-key/spoken-wow"
         tag_prefix = "readables-audio/"
         depends = ["spoken"]
@@ -87,16 +92,23 @@ final class CliTest {
   }
 
   private int run(String... args) {
-    out = new StringWriter();
-    err = new StringWriter();
-    var cl = WowfamCommand.newCommandLine(Map.of(), github::backends);
-    cl.setOut(new PrintWriter(out, true));
-    cl.setErr(new PrintWriter(err, true));
     var full = new String[args.length + 2];
     full[0] = "--config";
     full[1] = config.toString();
     System.arraycopy(args, 0, full, 2, args.length);
-    return cl.execute(full);
+    return runAs(Map.of(), Optional.empty(), full);
+  }
+
+  /** The CLI as a user with {@code env} runs it, answering questions with {@code answers}. */
+  private int runAs(Map<String, String> env, Optional<String> answers, String... args) {
+    out = new StringWriter();
+    err = new StringWriter();
+    var cl =
+        WowfamCommand.newCommandLine(
+            env, github::backends, answers.map(a -> new BufferedReader(new StringReader(a))));
+    cl.setOut(new PrintWriter(out, true));
+    cl.setErr(new PrintWriter(err, true));
+    return cl.execute(args);
   }
 
   @Test
@@ -108,7 +120,7 @@ final class CliTest {
     assertThat(addons.resolve("SpokenReadablesAudio")).isDirectory();
     assertThat(err.toString()).isEmpty();
 
-    var lock = LockFile.read(tmp.resolve("wowfam.lock"));
+    var lock = LockFile.read(tmp.resolve("wowfam.lock"), "test");
     assertThat(lock.get("spoken"))
         .hasValueSatisfying(e -> {
           assertThat(e.tag()).isEqualTo("spoken/v3.8.4");
@@ -160,10 +172,12 @@ final class CliTest {
         config,
         """
         [settings]
-        addons_dir = "Interface/AddOns"
         cache_dir = "cache"
 
-        [addons.quests-only]
+        [games.test]
+        addons_dir = "Interface/AddOns"
+
+        [games.test.addons.quests-only]
         source = "github:someone/quests"
         """);
     github.release(
@@ -182,7 +196,7 @@ final class CliTest {
         Files.readString(config)
             + """
 
-            [addons.copycat]
+            [games.test.addons.copycat]
             source = "github:someone/copycat"
             """);
     github.release(
@@ -206,7 +220,7 @@ final class CliTest {
   void missingConfigFailsWithAMessage() throws Exception {
     Files.delete(config);
     assertThat(run("list")).isEqualTo(1);
-    assertThat(err.toString()).contains("no wowfam.toml found");
+    assertThat(err.toString()).contains("no config at", "run wowfam init");
   }
 
   @Test
@@ -215,10 +229,12 @@ final class CliTest {
         config,
         """
         [settings]
-        addons_dir = "Interface/AddOns"
         cache_dir = "cache"
 
-        [addons.bars]
+        [games.test]
+        addons_dir = "Interface/AddOns"
+
+        [games.test.addons.bars]
         source = "github:someone/bars"
         flavor = "classic_era"
         """);
@@ -234,7 +250,7 @@ final class CliTest {
 
     assertThat(run("install")).as(err.toString()).isEqualTo(0);
     assertThat(addons.resolve("Bars/Bars.toc")).content().contains("## Version: 1.0.0-classic");
-    assertThat(LockFile.read(tmp.resolve("wowfam.lock")).get("bars"))
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock"), "test").get("bars"))
         .hasValueSatisfying(e -> {
           assertThat(e.asset()).isEqualTo("Bars-v1.0.0-classic.zip");
           assertThat(e.checksum()).isPresent();
@@ -267,7 +283,10 @@ final class CliTest {
     Files.writeString(
         config,
         """
-        [addons.bars]
+        [games.test]
+        addons_dir = "Interface/AddOns"
+
+        [games.test.addons.bars]
         source = "github:someone/bars"
         flavor = "cata"
         """);
@@ -288,10 +307,12 @@ final class CliTest {
         config,
         """
         [settings]
-        addons_dir = "Interface/AddOns"
         cache_dir = "cache"
 
-        [addons.bars]
+        [games.test]
+        addons_dir = "Interface/AddOns"
+
+        [games.test.addons.bars]
         source = "github:someone/bars"
         interface = "11508"
         """);
@@ -316,14 +337,18 @@ final class CliTest {
     Files.writeString(config, keeping);
 
     // Not installed, there is nothing to keep: that is still an error.
-    Files.writeString(config, Files.readString(config).replace("[addons.bars]", "[addons.bars2]"));
+    Files.writeString(
+        config,
+        Files.readString(config).replace("[games.test.addons.bars]", "[games.test.addons.bars2]"));
     assertThat(run("install", "bars2")).isEqualTo(1);
     assertThat(err.toString()).contains("matches version 'latest' for interface 50503");
   }
 
   private void withHooks(String hooks) throws Exception {
     Files.writeString(
-        config, Files.readString(config).replace("[addons.spoken]", hooks + "\n[addons.spoken]"));
+        config,
+        Files.readString(config)
+            .replace("[games.test.addons.spoken]", hooks + "\n[games.test.addons.spoken]"));
   }
 
   @DisabledOnOs(OS.WINDOWS)
@@ -366,7 +391,7 @@ final class CliTest {
     assertThat(err.toString()).contains("pre_install hook for spoken failed with exit code 3");
     assertThat(addons).isEmptyDirectory();
     assertThat(tmp.resolve("post-ran")).doesNotExist();
-    assertThat(LockFile.read(tmp.resolve("wowfam.lock")).get("spoken")).isEmpty();
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock"), "test").get("spoken")).isEmpty();
 
     assertThat(run("install", "--no-hooks")).as(err.toString()).isEqualTo(0);
     assertThat(addons.resolve("Spoken")).isDirectory();
@@ -385,7 +410,7 @@ final class CliTest {
     assertThat(run("install", "spoken")).isEqualTo(1);
     assertThat(err.toString()).contains("post_install hook for spoken failed with exit code 1");
     assertThat(addons.resolve("Spoken")).isDirectory();
-    assertThat(LockFile.read(tmp.resolve("wowfam.lock")).get("spoken")).isPresent();
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock"), "test").get("spoken")).isPresent();
   }
 
   private int downloads() {
@@ -414,7 +439,7 @@ final class CliTest {
     assertThat(run("add", "https://github.com/fitzforge/polestar")).as(err.toString()).isEqualTo(0);
     var table =
         """
-        [addons.polestar]
+        [games.test.addons.polestar]
         source = "github:fitzforge/polestar"
         version = "latest"
         asset = "Polestar-*.zip"
@@ -425,18 +450,18 @@ final class CliTest {
         .contains("Polestar was already in AddOns; wowfam manages it now")
         .doesNotContain("Polestar_Codex was already");
     assertThat(addons.resolve("Polestar/Polestar.toc")).exists();
-    assertThat(LockFile.read(tmp.resolve("wowfam.lock")).get("polestar")).isPresent();
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock"), "test").get("polestar")).isPresent();
 
     assertThat(run("add", "fitzforge/polestar", "--name", "again")).isEqualTo(1);
-    assertThat(err.toString())
-        .contains("github:fitzforge/polestar is already in", "as addons.polestar");
+    assertThat(err.toString()).contains("github:fitzforge/polestar is already in", "as polestar");
     assertThat(run("add", "fitzforge/polestar")).isEqualTo(1);
     assertThat(err.toString()).contains("github:fitzforge/polestar is already in");
     // GitHub names are case-insensitive.
     assertThat(run("add", "FitzForge/Polestar")).isEqualTo(1);
-    assertThat(err.toString()).contains("is already in", "as addons.polestar");
+    assertThat(err.toString()).contains("is already in", "as polestar");
     assertThat(run("add", "o/other", "--name", "polestar")).isEqualTo(1);
-    assertThat(err.toString()).contains("addons.polestar is already in", "pick another --name");
+    assertThat(err.toString())
+        .contains("polestar is already an addon of game test", "pick another --name");
   }
 
   @Test
@@ -446,7 +471,7 @@ final class CliTest {
         "bosses-audio/v2.1.0",
         addonZip("SpokenBossesAudio-2.1.0.zip", "2.1.0", Map.of("SpokenBossesAudio", "")));
     assertThat(run("add", REPO, "--tag-prefix", "readables-audio/")).isEqualTo(1);
-    assertThat(err.toString()).contains("already in", "as addons.spoken-readables-audio");
+    assertThat(err.toString()).contains("already in", "as spoken-readables-audio");
 
     assertThat(
             run(
@@ -461,7 +486,7 @@ final class CliTest {
                 "--no-install"))
         .as(err.toString())
         .isEqualTo(0);
-    var audio = new ConfigLoader(Map.of(), tmp).load(config).addons().get("audio");
+    var audio = new ConfigLoader(Map.of(), tmp).load(config).game("test").addons().get("audio");
     assertThat(audio).isNotNull();
     assertThat(audio.version()).isEqualTo("2");
     assertThat(audio.options())
@@ -499,7 +524,7 @@ final class CliTest {
   @Test
   void everydayFailuresAreMessagesNotStackTraces() throws Exception {
     // A hand-edited lock with a typo.
-    Files.writeString(tmp.resolve("wowfam.lock"), "[addons.spoken\n");
+    Files.writeString(tmp.resolve("wowfam.lock"), "[games.test.addons.spoken\n");
     assertThat(run("install")).isEqualTo(1);
     assertThat(err.toString()).startsWith("error: invalid lock file").doesNotContain("\tat ");
     Files.delete(tmp.resolve("wowfam.lock"));
@@ -523,14 +548,15 @@ final class CliTest {
   @Test
   void inAGameFolderReleaseJsonPicksTheZipForThatGame() throws Exception {
     var wow = WowInstall.create(tmp, Map.of("_forever_", "wowf"), "eu|1|abc|1.60.1.70938|wowf\n");
-    config = wow.resolve("_forever_/wowfam.toml");
     addons = wow.resolve("_forever_/Interface/AddOns");
     Files.writeString(
         config,
         """
         [settings]
-        addons_dir = "Interface/AddOns"
         cache_dir = "cache"
+
+        [games.test]
+        dir = "World of Warcraft/_forever_"
         """);
     github.release(
         "someone/bars",
@@ -548,21 +574,23 @@ final class CliTest {
         .content()
         .endsWith(
             """
-            [addons.bars]
+            [games.test.addons.bars]
             source = "github:someone/bars"
             version = "latest"
             """);
     assertThat(addons.resolve("Bars/Bars.toc")).content().contains("## Version: 1.0.0-forever");
 
     assertThat(run("list")).isEqualTo(0);
-    assertThat(out.toString()).startsWith("game: wowf 1.60.1.70938 (interface 16001)");
+    assertThat(out.toString()).startsWith("test: wowf 1.60.1.70938 (interface 16001)");
 
     // An entry written by hand with an asset is the same addon.
     Files.writeString(
         config,
-        Files.readString(config).replace("[addons.bars]", "[addons.old]\nasset = \"Bars-*.zip\""));
+        Files.readString(config)
+            .replace(
+                "[games.test.addons.bars]", "[games.test.addons.old]\nasset = \"Bars-*.zip\""));
     assertThat(run("add", "someone/bars", "--name", "again", "-n")).isEqualTo(1);
-    assertThat(err.toString()).contains("is already in", "as addons.old");
+    assertThat(err.toString()).contains("is already in", "as old");
   }
 
   @Test
@@ -578,7 +606,7 @@ final class CliTest {
     assertThat(out.toString())
         .contains(
             "would uninstall spoken-readables-audio 2.3.0  (SpokenReadablesAudio)",
-            "would remove addons.spoken-readables-audio from");
+            "would remove spoken-readables-audio from game test");
     assertThat(config).content().isEqualTo(before);
     assertThat(addons.resolve("SpokenReadablesAudio")).isDirectory();
 
@@ -586,19 +614,22 @@ final class CliTest {
     assertThat(out.toString())
         .contains(
             "- spoken-readables-audio 2.3.0  (SpokenReadablesAudio)",
-            "removed addons.spoken-readables-audio from");
+            "removed spoken-readables-audio from game test");
     assertThat(addons.resolve("SpokenReadablesAudio")).doesNotExist();
     assertThat(addons.resolve("Spoken")).isDirectory();
-    assertThat(LockFile.read(tmp.resolve("wowfam.lock")).entries()).containsOnlyKeys("spoken");
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock"), "test").entries())
+        .containsOnlyKeys("spoken");
     assertThat(config)
         .content()
         .isEqualTo(
             """
             [settings]
-            addons_dir = "Interface/AddOns"
             cache_dir = "cache"
 
-            [addons.spoken]
+            [games.test]
+            addons_dir = "Interface/AddOns"
+
+            [games.test.addons.spoken]
             source = "github:rusty-key/spoken-wow"
             tag_prefix = "spoken/"
             asset = "Spoken-*.zip"
@@ -622,12 +653,12 @@ final class CliTest {
     Files.writeString(
         config,
         Files.readString(config)
-            .replace("[addons.spoken]", "[addons.player]")
+            .replace("[games.test.addons.spoken]", "[games.test.addons.player]")
             .replace("depends = [\"spoken\"]", "depends = [\"player\"]"));
 
     assertThat(run("install")).as(err.toString()).isEqualTo(0);
 
-    assertThat(LockFile.read(tmp.resolve("wowfam.lock")).entries())
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock"), "test").entries())
         .containsOnlyKeys("player", "spoken-readables-audio");
     assertThat(out.toString())
         .contains("✓ player 3.8.4", "- spoken 3.8.4  (its folders belong to another addon now)");
@@ -639,7 +670,9 @@ final class CliTest {
     assertThat(run("install")).as(err.toString()).isEqualTo(0);
     var full = Files.readString(config);
     Files.writeString(
-        config, full.substring(0, full.indexOf("[addons.spoken-readables-audio]")).strip() + "\n");
+        config,
+        full.substring(0, full.indexOf("[games.test.addons.spoken-readables-audio]")).strip()
+            + "\n");
 
     // Naming addons only touches those.
     assertThat(run("install", "spoken")).as(err.toString()).isEqualTo(0);
@@ -651,7 +684,8 @@ final class CliTest {
             "uninstalling spoken-readables-audio, which is no longer in",
             "- spoken-readables-audio 2.3.0  (SpokenReadablesAudio)");
     assertThat(addons.resolve("SpokenReadablesAudio")).doesNotExist();
-    assertThat(LockFile.read(tmp.resolve("wowfam.lock")).entries()).containsOnlyKeys("spoken");
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock"), "test").entries())
+        .containsOnlyKeys("spoken");
   }
 
   @Test
@@ -668,5 +702,211 @@ final class CliTest {
 
     assertThat(addons.resolve("Spoken/Spoken.toc")).content().contains("3.9.0");
     assertThat(addons.resolve("SpokenQuests")).doesNotExist();
+  }
+
+  @Test
+  void eachGameHasItsOwnAddonsAndLock() throws Exception {
+    var classic = tmp.resolve("classic/AddOns");
+    Files.writeString(
+        config,
+        Files.readString(config)
+            + """
+
+            [games.classic]
+            addons_dir = "classic/AddOns"
+
+            [games.classic.addons.spoken]
+            source = "github:rusty-key/spoken-wow"
+            tag_prefix = "spoken/"
+            asset = "Spoken-*.zip"
+            """);
+
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString()).contains("test:\n", "classic:\n", "✓ spoken 3.8.4");
+    assertThat(addons.resolve("Spoken")).isDirectory();
+    assertThat(classic.resolve("Spoken")).isDirectory();
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock"), "classic").entries())
+        .containsOnlyKeys("spoken");
+
+    // Naming an addon runs it in every game that has it, and only those.
+    github.release(REPO, "spoken/v3.8.5", spoken("3.8.5", false));
+    assertThat(run("update", "spoken-readables-audio")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString()).doesNotContain("classic:");
+    assertThat(classic.resolve("Spoken/Spoken.toc")).content().contains("3.8.4");
+
+    assertThat(run("outdated")).isEqualTo(0);
+    assertThat(out.toString()).containsPattern("classic\\s+spoken\\s+3.8.4\\s+3.8.5");
+    assertThat(run("update", "-g", "classic")).as(err.toString()).isEqualTo(0);
+    assertThat(classic.resolve("Spoken/Spoken.toc")).content().contains("3.8.5");
+
+    // add and remove need to know which game.
+    github.release(
+        "someone/bars", "v1.0.0", addonZip("Bars-1.0.0.zip", "1.0.0", Map.of("Bars", "")));
+    assertThat(run("add", "someone/bars")).isEqualTo(1);
+    assertThat(err.toString()).contains("which game? pick one with --game (test, classic)");
+    assertThat(run("add", "someone/bars", "-g", "classic")).as(err.toString()).isEqualTo(0);
+    assertThat(classic.resolve("Bars")).isDirectory();
+    // The new table joins the game's others, not the end of the file.
+    assertThat(Files.readString(config).indexOf("[games.classic.addons.bars]"))
+        .isGreaterThan(Files.readString(config).indexOf("[games.classic.addons.spoken]"));
+    assertThat(run("rm", "bars", "-g", "classic")).as(err.toString()).isEqualTo(0);
+    assertThat(classic.resolve("Bars")).doesNotExist();
+  }
+
+  /** A home with Battle.net in a Lutris prefix, and its classic era and forever folders. */
+  private Map<String, String> lutrisHome() throws Exception {
+    var home = tmp.resolve("home");
+    WowInstall.create(
+        home.resolve("Games/battlenet/drive_c/Program Files (x86)"),
+        Map.of("_forever_", "wowf", "_classic_era_", "wow_classic_era"),
+        "eu|1|abc|1.60.1.70938|wowf\neu|1|abc|1.15.8.1234|wow_classic_era\n");
+    return Map.of("HOME", home.toString(), "XDG_CONFIG_HOME", tmp.resolve("xdg").toString());
+  }
+
+  private static final String LUTRIS_WOW =
+      "~/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft";
+
+  @Test
+  void initFindsTheGamesAndWritesTheGlobalConfig() throws Exception {
+    var env = lutrisHome();
+    var file = tmp.resolve("xdg/wowfam/wowfam.toml");
+
+    // Nobody to ask: it says how to go on rather than guess.
+    assertThat(runAs(env, Optional.empty(), "init")).isEqualTo(1);
+    assertThat(err.toString()).contains("wowfam init --yes");
+    assertThat(file).doesNotExist();
+
+    assertThat(runAs(env, Optional.of("all\nforever\n"), "init")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString())
+        .contains("1  classic_era", "2  forever", "(wowf 1.60.1.70938 (interface 16001))");
+    assertThat(file)
+        .content()
+        .endsWith(
+            """
+            [settings]
+            default_game = "forever"
+
+            [games.classic_era]
+            dir = "%s/_classic_era_"
+
+            [games.forever]
+            dir = "%s/_forever_"
+            """
+                .formatted(LUTRIS_WOW, LUTRIS_WOW));
+
+    assertThat(runAs(env, Optional.empty(), "init")).isEqualTo(0);
+    assertThat(out.toString()).contains("every game found is already in", "nothing to change");
+
+    // The global file is what every command reads now.
+    assertThat(runAs(env, Optional.empty(), "list")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString())
+        .contains("classic_era: wow_classic_era 1.15.8.1234", "forever: wowf");
+  }
+
+  @Test
+  void initPicksSomeGamesOrAFolderItWasPointedAt() throws Exception {
+    var env = lutrisHome();
+    var file = tmp.resolve("xdg/wowfam/wowfam.toml");
+
+    assertThat(runAs(env, Optional.of("7\n2\n"), "init")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString()).contains("pick numbers from 1 to 2");
+    assertThat(file).content().contains("[games.forever]", "default_game = \"forever\"");
+    assertThat(file).content().doesNotContain("classic_era");
+
+    var other =
+        WowInstall.create(tmp.resolve("other"), Map.of("_retail_", "wow"), "eu|1|a|12.0.1.1|wow\n");
+    assertThat(runAs(env, Optional.empty(), "init", "--dir", other.resolve("_retail_").toString()))
+        .as(err.toString())
+        .isEqualTo(0);
+    assertThat(file)
+        .content()
+        .contains("[games.retail]\ndir = \"" + other.resolve("_retail_") + "\"")
+        .contains("default_game = \"forever\"");
+  }
+
+  @Test
+  void initAsksForTheFolderWhenItFindsNone() throws Exception {
+    var env =
+        Map.of(
+            "HOME",
+            tmp.resolve("empty").toString(),
+            "XDG_CONFIG_HOME",
+            tmp.resolve("xdg").toString());
+    var wow =
+        WowInstall.create(
+            tmp.resolve("odd place"), Map.of("_retail_", "wow"), "eu|1|a|12.0.1.1|wow\n");
+
+    assertThat(runAs(env, Optional.empty(), "init")).isEqualTo(1);
+    assertThat(err.toString()).contains("found no World of Warcraft install", "--dir");
+
+    assertThat(runAs(env, Optional.of("/nowhere\n" + wow + "\n"), "init"))
+        .as(err.toString())
+        .isEqualTo(0);
+    assertThat(out.toString()).contains("no game folder (_retail_, _classic_era_...) in /nowhere");
+    assertThat(tmp.resolve("xdg/wowfam/wowfam.toml")).content().contains("[games.retail]");
+  }
+
+  @Test
+  void initMovesInAnOldConfigFromTheGameFolder() throws Exception {
+    var env = lutrisHome();
+    var forever =
+        tmp.resolve("home/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft/_forever_");
+    // How wowfam was set up before global configs: the file and its lock in the game folder.
+    config = forever.resolve("wowfam.toml");
+    addons = forever.resolve("Interface/AddOns");
+    Files.writeString(
+        config,
+        """
+        [settings]
+        addons_dir = "Interface/AddOns"
+
+        # the player
+        [addons.spoken]
+        source = "github:rusty-key/spoken-wow"
+        tag_prefix = "spoken/"   # only the player's tags
+        asset = "Spoken-*.zip"
+        """);
+    Files.writeString(
+        forever.resolve("wowfam.lock"),
+        """
+        [addons.spoken]
+        source = "github:rusty-key/spoken-wow"
+        version = "3.8.4"
+        tag = "spoken/v3.8.4"
+        asset = "Spoken-3.8.4.zip"
+        url = "https://example.invalid/Spoken-3.8.4.zip"
+        folders = ["Spoken"]
+        """);
+    Files.createDirectories(addons.resolve("Spoken"));
+    assertThat(run("list")).isEqualTo(1);
+    assertThat(err.toString()).contains("wowfam init --import");
+
+    assertThat(runAs(env, Optional.empty(), "init", "--yes")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString()).contains("imported spoken into game forever");
+    var file = tmp.resolve("xdg/wowfam/wowfam.toml");
+    assertThat(file)
+        .content()
+        .contains(
+            """
+            [games.forever]
+            dir = "%s/_forever_"
+
+            # the player
+            [games.forever.addons.spoken]
+            source = "github:rusty-key/spoken-wow"
+            tag_prefix = "spoken/"   # only the player's tags
+            asset = "Spoken-*.zip"
+            """
+                .formatted(LUTRIS_WOW));
+    assertThat(LockFile.read(tmp.resolve("xdg/wowfam/wowfam.lock"), "forever").get("spoken"))
+        .hasValueSatisfying(e -> assertThat(e.version()).isEqualTo("3.8.4"));
+
+    // An explicit --import into a config that already has the game.
+    Files.writeString(
+        config, Files.readString(config).replace("[addons.spoken]", "[addons.other]"));
+    assertThat(runAs(env, Optional.empty(), "init", "--import", config.toString()))
+        .as(err.toString())
+        .isEqualTo(0);
+    assertThat(file).content().contains("[games.forever.addons.other]");
   }
 }

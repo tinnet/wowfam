@@ -10,11 +10,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A parsed {@code wowfam.toml}. Addons keep the order they were written in.
+ * One game of a {@code wowfam.toml}: its {@code [games.<name>]} table and the addons in it, in the
+ * order they were written.
  *
+ * @param file the {@code wowfam.toml} it is part of
+ * @param name the game's name in the file, e.g. {@code forever}
  * @param hooks the {@code [hooks]} table, run for every addon before the addon's own hooks
  */
-public record Config(Path file, Settings settings, Hooks hooks, Map<String, AddonSpec> addons) {
+public record Config(
+    Path file, String name, Settings settings, Hooks hooks, Map<String, AddonSpec> addons) {
 
   public static final String FILE_NAME = "wowfam.toml";
   public static final String LOCK_FILE_NAME = "wowfam.lock";
@@ -23,8 +27,8 @@ public record Config(Path file, Settings settings, Hooks hooks, Map<String, Addo
     addons = unmodifiableMap(new LinkedHashMap<>(addons));
   }
 
-  public Config(Path file, Settings settings, Map<String, AddonSpec> addons) {
-    this(file, settings, Hooks.NONE, addons);
+  public Config(Path file, String name, Settings settings, Map<String, AddonSpec> addons) {
+    this(file, name, settings, Hooks.NONE, addons);
   }
 
   /** The global hooks followed by the addon's own. */
@@ -45,13 +49,13 @@ public record Config(Path file, Settings settings, Hooks hooks, Map<String, Addo
     Collection<String> roots = names.isEmpty() ? addons.keySet() : names;
     for (var root : roots) {
       if (!addons.containsKey(root)) {
-        throw new ConfigException("no addon named '" + root + "' in " + file);
+        throw new ConfigException("no addon named '" + root + "' in game " + name + " of " + file);
       }
     }
     try {
       return DependencyOrder.resolve(graph, roots).stream().map(addons::get).toList();
     } catch (DependencyOrder.CycleException e) {
-      throw new ConfigException(e.getMessage() + " in " + file, e);
+      throw new ConfigException(e.getMessage() + " in game " + name + " of " + file, e);
     }
   }
 }

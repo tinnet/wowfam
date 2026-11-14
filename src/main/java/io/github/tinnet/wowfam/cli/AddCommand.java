@@ -8,7 +8,6 @@ import io.github.tinnet.wowfam.config.AddonSpec;
 import io.github.tinnet.wowfam.config.Config;
 import io.github.tinnet.wowfam.config.ConfigEditor;
 import io.github.tinnet.wowfam.config.ConfigException;
-import io.github.tinnet.wowfam.config.ConfigLoader;
 import io.github.tinnet.wowfam.config.Source;
 import io.github.tinnet.wowfam.install.Installer;
 import io.github.tinnet.wowfam.lock.LockFile;
@@ -107,7 +106,8 @@ final class AddCommand implements Callable<Integer> {
 
   @Override
   public Integer call() {
-    var config = root.loadConfig();
+    var workspace = root.loadWorkspace();
+    var config = root.oneGame(workspace);
     var src = Source.fromInput(source);
     var addonName = name != null ? name : defaultName(src);
     if (!ConfigEditor.NAME.matcher(addonName).matches()) {
@@ -118,11 +118,10 @@ final class AddCommand implements Callable<Integer> {
     if (taken != null) {
       throw new ConfigException(
           taken.source().sameAs(src)
-              ? src + " is already in " + config.file() + " as addons." + addonName
-              : "addons."
-                  + addonName
-                  + " is already in "
-                  + config.file()
+              ? src + " is already in game " + config.name() + " as " + addonName
+              : addonName
+                  + " is already an addon of game "
+                  + config.name()
                   + "; pick another --name");
     }
     var options = new LinkedHashMap<String, String>();
@@ -153,7 +152,7 @@ final class AddCommand implements Callable<Integer> {
               || addon.option("asset").isEmpty()
               || existing.option("asset").equals(addon.option("asset")))) {
         throw new ConfigException(
-            src + " is already in " + config.file() + " as addons." + existing.name());
+            src + " is already in game " + config.name() + " as " + existing.name());
       }
     }
     var release =
@@ -171,6 +170,7 @@ final class AddCommand implements Callable<Integer> {
     }
     var table =
         ConfigEditor.addonTable(
+            config.name(),
             new AddonSpec(addon.name(), addon.source(), addon.version(), List.of(), written));
     var out = spec.commandLine().getOut();
     if (dryRun) {
@@ -181,11 +181,16 @@ final class AddCommand implements Callable<Integer> {
       return 0;
     }
     var original = read(config.file());
-    var edited = ConfigEditor.append(original, table);
-    // Appending a table is only wrong when the file keeps its addons in a form a new [addons.x]
-    // cannot join (an inline table); parse first so that never reaches the disk.
-    if (!new ConfigLoader().parse(config.file(), edited).addons().containsKey(addonName)) {
-      throw new ConfigException("cannot add addons." + addonName + " to " + config.file());
+    var edited = ConfigEditor.appendToGame(original, config.name(), table);
+    // Adding a table is only wrong when the file keeps its addons in a form a new table cannot
+    // join (an inline table); parse first so that never reaches the disk.
+    if (!root.loader()
+        .parse(config.file(), edited)
+        .game(config.name())
+        .addons()
+        .containsKey(addonName)) {
+      throw new ConfigException(
+          "cannot add " + addonName + " to game " + config.name() + " in " + config.file());
     }
     ConfigEditor.write(config.file(), edited);
     out.printf("added to %s:%n%s", config.file(), table);
@@ -193,9 +198,9 @@ final class AddCommand implements Callable<Integer> {
       return 0;
     }
 
-    var updated = root.loadConfig();
+    var updated = root.loadWorkspace().game(config.name());
     var unmanaged = unmanagedFolders(updated);
-    var lockedBefore = LockFile.read(updated.lockFile()).get(addonName);
+    var lockedBefore = LockFile.read(updated.lockFile(), updated.name()).get(addonName);
     Installer.Report report;
     try {
       report =
@@ -206,7 +211,7 @@ final class AddCommand implements Callable<Integer> {
       // failed download, a pre_install hook saying no) is taken out again. One that did, but whose
       // post_install hook failed, is locked and stays. A lock entry left over from an earlier
       // addon of the same name doesn't count: only one this run wrote does.
-      if (LockFile.read(updated.lockFile()).get(addonName).equals(lockedBefore)) {
+      if (LockFile.read(updated.lockFile(), updated.name()).get(addonName).equals(lockedBefore)) {
         ConfigEditor.write(config.file(), original);
         spec.commandLine().getErr().println("not installed, so not added to " + config.file());
       }
@@ -241,7 +246,7 @@ final class AddCommand implements Callable<Integer> {
 
   /** Folders in AddOns that no entry of the lock owns. */
   private static Set<String> unmanagedFolders(Config config) {
-    var lock = LockFile.read(config.lockFile());
+    var lock = LockFile.read(config.lockFile(), config.name());
     var dir = config.settings().addonsDir();
     if (!Files.isDirectory(dir)) {
       return Set.of();
