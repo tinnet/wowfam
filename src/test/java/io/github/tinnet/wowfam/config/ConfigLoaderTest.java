@@ -81,6 +81,18 @@ final class ConfigLoaderTest {
   }
 
   @Test
+  void rejectsNamesThatCouldLeaveAFolder() {
+    for (var name : List.of("x/../../Saved", "my addon", "..", "a.b")) {
+      assertThatThrownBy(
+              () -> loader.parse(FILE, "[addons.\"" + name + "\"]\nsource = \"github:o/r\"\n"))
+          .isInstanceOf(ConfigException.class)
+          .hasMessageContaining("may only use letters, digits, - and _");
+    }
+    assertThat(loader.parse(FILE, "[addons.Ok_name-2]\nsource = \"github:o/r\"\n").addons())
+        .containsKey("Ok_name-2");
+  }
+
+  @Test
   void rejectsMissingSource() {
     assertThatThrownBy(() -> loader.parse(FILE, "[addons.a]\nversion = \"1\"\n"))
         .isInstanceOf(ConfigException.class)

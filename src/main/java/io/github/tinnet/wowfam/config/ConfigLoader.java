@@ -99,6 +99,15 @@ public final class ConfigLoader {
       throw new ConfigException("'addons' must be a table in " + file);
     }
     for (var entry : addonsNode.properties()) {
+      // Names become folder names (staging, cache), so nothing that could leave a folder.
+      if (!ConfigEditor.NAME.matcher(entry.getKey()).matches()) {
+        throw new ConfigException(
+            "addons.\""
+                + entry.getKey()
+                + "\" in "
+                + file
+                + ": addon names may only use letters, digits, - and _");
+      }
       addons.put(entry.getKey(), addon(entry.getKey(), entry.getValue(), settings.game()));
     }
     for (var spec : addons.values()) {

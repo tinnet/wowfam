@@ -106,7 +106,7 @@ and manages it from then on. If installing fails, the entry is taken out of `wow
 addons_dir = "Interface/AddOns"   # default: ./AddOns; relative to this file, ~ for your home
 # cache_dir = "~/.cache/wowfam"   # where downloaded zips are kept
 
-[addons.spoken]                   # a name of your choosing
+[addons.spoken]                   # a name of your choosing: letters, digits, - and _
 source = "github:rusty-key/spoken-wow"
 version = "latest"                # "latest", exact "3.8.5", or a prefix like "3" / "3.8"
 tag_prefix = "spoken/"            # only tags starting with this (repositories with several projects)
