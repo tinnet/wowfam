@@ -145,6 +145,9 @@ closest earlier version of the same expansion. An addon whose newest release no 
 your game stays on its last release that did, and one that is installed but has no release for
 your game at all (after a new expansion) is left as it is.
 
+`add` in a game folder therefore writes no `asset` for such addons. If you use that
+`wowfam.toml` outside the game folder (with `--addons-dir` elsewhere, say), give them a `flavor`.
+
 Outside a game folder, or to override it, name the game per addon:
 
 ```toml
