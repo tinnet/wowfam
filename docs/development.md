@@ -19,7 +19,8 @@ just poc            # install the Spoken example into examples/spoken/AddOns
 just fmt            # google-java-format via Spotless, plus `just --fmt` (`just fmt-check` to verify)
 just ep-fix         # apply Error Prone's suggested fixes in place
 just secrets        # betterleaks over the tree and the git history
-just release        # tag today's CalVer release (vYYYY.MM.DD) and push it
+just changelog      # what the next release's notes would say
+just release        # write CHANGELOG.md, tag today's CalVer release (vYYYY.MM.DD), push both
 ```
 
 There is no Gradle wrapper. mise installs the Gradle pinned in `mise.toml`; without mise, any
@@ -77,13 +78,19 @@ under prefixed tags. `just poc` installs it into `examples/spoken/AddOns`.
 ## Releases
 
 Versions are CalVer, `YYYY.MM.DD` (`YYYY.MM.DD.N` for another release that day); local builds
-report `dev`. `just release` tags today's version on a clean `main` that matches `origin/main`, and
-pushes the tag.
+report `dev`. `just release`, on a clean `main` that matches `origin/main`, writes
+[`CHANGELOG.md`](../CHANGELOG.md) with [git-cliff](https://git-cliff.org), commits it as
+`chore(release): <version>`, tags that commit and pushes both.
+
+The changelog and the release notes are built from the commit subjects ([`cliff.toml`](../cliff.toml)):
+`feat`, `fix`, `perf` and `docs` commits are listed under their own heading; `refactor`, `test`,
+`build`, `ci` and `chore` are left out as internal. So the subject of a user-visible commit is
+what users read.
 
 Pushing a `v20*` tag runs [`release.yml`](../.github/workflows/release.yml). It builds the native
 binary on Linux, macOS and Windows, checks that `--version` matches the tag, and publishes the
-archives (named the way mise's GitHub backend expects) with a `SHA256SUMS` file and generated
-notes. Once the repository is public it also signs build provenance, which
+archives (named the way mise's GitHub backend expects) with a `SHA256SUMS` file, and that
+release's section of the changelog as its notes. Once the repository is public it also signs build provenance, which
 `gh attestation verify` and mise check.
 
 While the repository is private, `mise use github:tinnet/wowfam` needs a `GITHUB_TOKEN` that can

@@ -56,10 +56,18 @@ secrets:
 # What CI runs
 ci: secrets fmt-check test
 
-# Tag a CalVer release from main (today's date, or e.g. `just release 2026.11.10.1`) and push it
+# Show what the next release's notes would say
+changelog:
+    git cliff --unreleased --strip header
+
+# Release from main (today's date, or e.g. `just release 2026.11.10.1`): commit CHANGELOG.md, tag, push
 [unix]
 release version=`date +%Y.%m.%d`:
     git diff --quiet HEAD && git fetch -q origin main && test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || { echo "release from a clean main that matches origin/main" >&2; exit 1; }
+    git cliff --tag "v{{ version }}" --output CHANGELOG.md
+    git add CHANGELOG.md
+    git diff --cached --quiet || git commit -q -m "chore(release): {{ version }}"
+    git push origin HEAD:main
     git tag -s "v{{ version }}" -m "wowfam {{ version }}"
     git push origin "v{{ version }}"
 

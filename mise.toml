@@ -9,3 +9,5 @@ just = "1.59.0"
 lefthook = "2.2.2"
 # 1.x is the stable line; 2.0 is still a release candidate.
 betterleaks = "1.10.0"
+# Release notes and CHANGELOG.md from the Conventional Commits.
+git-cliff = "2.14.2"

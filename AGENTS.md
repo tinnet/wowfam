@@ -55,6 +55,8 @@ The commit-msg hook enforces it.
 
 Scopes are optional; use a package or area (`cli`, `install`, `github`, `native`, `hooks`).
 Description in lower case, imperative, no trailing period. The body says why, wrapped at 72.
+`feat`, `fix`, `perf` and `docs` subjects become the changelog and release notes (git-cliff), so
+write them for users: what changed for them, not how.
 `!` (or a `BREAKING CHANGE:` footer) marks a change to the CLI or `wowfam.toml` that breaks
 existing setups.
 
@@ -64,6 +66,6 @@ credentials (`GITHUB_TOKEN`); the secret scan runs on every commit.
 
 ## Releases
 
-CalVer, `vYYYY.MM.DD` (`.N` for another release that day). `just release` tags and pushes from a
-clean `main`; `.github/workflows/release.yml` builds and publishes. Don't create release tags any
+CalVer, `vYYYY.MM.DD` (`.N` for another release that day). `just release` writes
+`CHANGELOG.md`, commits, tags and pushes from a clean `main`; `.github/workflows/release.yml` builds and publishes. Don't create release tags any
 other way, and never move or delete a published tag.
