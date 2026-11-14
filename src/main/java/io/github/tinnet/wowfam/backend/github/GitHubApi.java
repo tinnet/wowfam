@@ -26,6 +26,8 @@ public final class GitHubApi {
   public static final URI DEFAULT_BASE = URI.create("https://api.github.com/");
   private static final Pattern NEXT_LINK = Pattern.compile("<([^>]+)>;\\s*rel=\"next\"");
   private static final JsonMapper JSON = JsonMapper.builder().build();
+  private static final String OCTET_STREAM = "application/octet-stream";
+  private static final int MAX_REDIRECTS = 5;
 
   /** Stop paging after this many pages of 100; monorepos with many tags stay well below it. */
   private static final int MAX_PAGES = 20;
@@ -40,6 +42,13 @@ public final class GitHubApi {
     this.token = token.filter(t -> !t.isBlank());
   }
 
+  /**
+   * A file attached to a release.
+   *
+   * @param downloadUrl the asset's API URL, which serves the file with {@code Accept:
+   *     application/octet-stream} and takes the token, so private repositories work; the {@code
+   *     browser_download_url} on github.com would not
+   */
   public record GitHubAsset(String name, URI downloadUrl, long size, Optional<String> digest) {}
 
   public record GitHubRelease(
@@ -79,7 +88,8 @@ public final class GitHubApi {
 
   /** The body of a small text asset, such as a release's {@code release.json}. */
   public String text(URI url) {
-    var response = send(get(url).build(), HttpResponse.BodyHandlers.ofString());
+    var response =
+        send(get(url).header("Accept", OCTET_STREAM).build(), HttpResponse.BodyHandlers.ofString());
     if (response.statusCode() / 100 != 2) {
       throw new BackendException("download of " + url + " failed: HTTP " + response.statusCode());
     }
@@ -89,7 +99,7 @@ public final class GitHubApi {
   public void download(URI url, Path target) {
     var response =
         send(
-            get(url).header("Accept", "application/octet-stream").build(),
+            get(url).header("Accept", OCTET_STREAM).build(),
             HttpResponse.BodyHandlers.ofInputStream());
     try (InputStream body = response.body()) {
       if (response.statusCode() / 100 != 2) {
@@ -117,7 +127,33 @@ public final class GitHubApi {
     return builder.GET();
   }
 
+  /**
+   * Sends {@code request}, following up to {@value #MAX_REDIRECTS} redirects. Each hop is a new
+   * request built by {@link #get}, so the token only goes along while the target is the API host:
+   * an asset download redirects to a CDN that must not see it.
+   */
   private <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> handler) {
+    var current = request;
+    for (int hop = 0; ; hop++) {
+      var response = sendOnce(current, handler);
+      var location = response.headers().firstValue("Location");
+      if (response.statusCode() / 100 != 3 || location.isEmpty() || hop == MAX_REDIRECTS) {
+        return response;
+      }
+      if (response.body() instanceof AutoCloseable body) {
+        try {
+          body.close();
+        } catch (Exception e) {
+          // Only the redirect's body, which nobody reads.
+        }
+      }
+      var next = get(current.uri().resolve(location.orElseThrow()));
+      current.headers().firstValue("Accept").ifPresent(a -> next.header("Accept", a));
+      current = next.build();
+    }
+  }
+
+  private <T> HttpResponse<T> sendOnce(HttpRequest request, HttpResponse.BodyHandler<T> handler) {
     try {
       return http.send(request, handler);
     } catch (IOException e) {
@@ -161,7 +197,10 @@ public final class GitHubApi {
       assets.add(
           new GitHubAsset(
               a.path("name").asString(),
-              URI.create(a.path("browser_download_url").asString()),
+              URI.create(
+                  a.path("url").isString()
+                      ? a.path("url").asString()
+                      : a.path("browser_download_url").asString()),
               a.path("size").asLong(),
               digest));
     }

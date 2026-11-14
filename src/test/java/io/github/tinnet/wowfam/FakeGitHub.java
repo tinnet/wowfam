@@ -42,6 +42,7 @@ public final class FakeGitHub implements AutoCloseable {
   private final HttpServer server;
   private final List<FakeRelease> releases = new CopyOnWriteArrayList<>();
   private final List<String> requests = new CopyOnWriteArrayList<>();
+  private final List<String> authorized = new CopyOnWriteArrayList<>();
   private int pageSize = 100;
 
   public FakeGitHub() {
@@ -75,6 +76,11 @@ public final class FakeGitHub implements AutoCloseable {
 
   public List<String> requests() {
     return List.copyOf(requests);
+  }
+
+  /** The requests that carried an {@code Authorization} header. */
+  public List<String> authorizedRequests() {
+    return List.copyOf(authorized);
   }
 
   public Backends backends() {
@@ -164,9 +170,15 @@ public final class FakeGitHub implements AutoCloseable {
 
   private void handle(HttpExchange exchange) throws IOException {
     var path = exchange.getRequestURI().getPath();
-    requests.add(exchange.getRequestMethod() + " " + exchange.getRequestURI());
+    var request = exchange.getRequestMethod() + " " + exchange.getRequestURI();
+    requests.add(request);
+    if (exchange.getRequestHeaders().containsKey("Authorization")) {
+      authorized.add(request);
+    }
     try (exchange) {
-      if (path.startsWith("/download/")) {
+      if (path.startsWith("/api-assets/")) {
+        apiAsset(exchange, path.substring("/api-assets/".length()));
+      } else if (path.startsWith("/download/")) {
         download(exchange, path.substring("/download/".length()));
       } else if (path.startsWith("/repos/") && path.endsWith("/releases")) {
         list(exchange, path.substring("/repos/".length(), path.length() - "/releases".length()));
@@ -204,6 +216,8 @@ public final class FakeGitHub implements AutoCloseable {
                 a.content().length,
                 "digest",
                 "sha256:" + sha256(a.content()),
+                "url",
+                base() + "api-assets/" + r.tag() + "/" + a.name(),
                 "browser_download_url",
                 base() + "download/" + r.tag() + "/" + a.name()));
       }
@@ -234,6 +248,24 @@ public final class FakeGitHub implements AutoCloseable {
                   + ">; rel=\"next\"");
     }
     send(exchange, 200, JsonMapper.builder().build().writeValueAsString(json));
+  }
+
+  /**
+   * An asset's API URL: with {@code Accept: application/octet-stream} a redirect to the file on
+   * another host (as GitHub's CDN is), otherwise the asset's JSON.
+   */
+  private void apiAsset(HttpExchange exchange, String tagAndName) throws IOException {
+    var accept = exchange.getRequestHeaders().getFirst("Accept");
+    if (!"application/octet-stream".equals(accept)) {
+      send(exchange, 200, "{\"name\":\"" + tagAndName + "\"}");
+      return;
+    }
+    exchange
+        .getResponseHeaders()
+        .add(
+            "Location",
+            "http://localhost:" + server.getAddress().getPort() + "/download/" + tagAndName);
+    exchange.sendResponseHeaders(302, -1);
   }
 
   private void download(HttpExchange exchange, String tagAndName) throws IOException {

@@ -28,7 +28,9 @@ public final class Http {
   public static HttpClient client(Map<String, String> env) {
     var builder =
         HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
+            // GitHubApi follows redirects itself, so a token never goes to the host a download
+            // is redirected to.
+            .followRedirects(HttpClient.Redirect.NEVER)
             .connectTimeout(Duration.ofSeconds(20));
     if (System.getProperty("https.proxyHost") != null
         || System.getProperty("http.proxyHost") != null) {

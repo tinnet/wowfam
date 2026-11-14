@@ -12,6 +12,7 @@ import dev.hegel.TestCase;
 import io.github.tinnet.wowfam.FakeGitHub;
 import io.github.tinnet.wowfam.FakeGitHub.FakeRelease;
 import io.github.tinnet.wowfam.backend.BackendException;
+import io.github.tinnet.wowfam.backend.Http;
 import io.github.tinnet.wowfam.backend.Release;
 import io.github.tinnet.wowfam.backend.ReleaseSelector;
 import io.github.tinnet.wowfam.config.AddonSpec;
@@ -57,7 +58,9 @@ final class GitHubBackendTest {
   }
 
   private long releaseJsonDownloads() {
-    return github.requests().stream().filter(r -> r.endsWith("/release.json")).count();
+    return github.requests().stream()
+        .filter(r -> r.contains("/download/") && r.endsWith("/release.json"))
+        .count();
   }
 
   @Test
@@ -152,6 +155,24 @@ final class GitHubBackendTest {
   }
 
   @Test
+  void theTokenReachesTheApiButNotTheHostADownloadIsRedirectedTo(@TempDir Path tmp) {
+    github.release("o/private", "v1.0.0", zip("Addon-1.0.0.zip"));
+    var api = new GitHubApi(Http.client(Map.of()), github.base(), Optional.of("secret"));
+
+    var asset = api.releases("o/private").getFirst().assets().getFirst();
+    api.download(asset.downloadUrl(), tmp.resolve("Addon.zip"));
+
+    assertThat(tmp.resolve("Addon.zip")).isRegularFile();
+    // The listing and the asset's API URL take the token (private repositories need it there);
+    // the CDN the asset redirects to must not see it.
+    assertThat(github.authorizedRequests())
+        .anyMatch(r -> r.contains("/repos/o/private/releases"))
+        .anyMatch(r -> r.contains("/api-assets/v1.0.0/Addon-1.0.0.zip"))
+        .noneMatch(r -> r.contains("/download/"));
+    assertThat(github.requests()).anyMatch(r -> r.contains("/download/v1.0.0/Addon-1.0.0.zip"));
+  }
+
+  @Test
   void theZipForAFlavorCarriesItsOwnChecksum() {
     github.release(
         "o/addon",
@@ -169,7 +190,7 @@ final class GitHubBackendTest {
 
     var release = ReleaseSelector.newest(backend, spec, listed).orElseThrow();
     assertThat(release.asset().name()).isEqualTo("Addon-v2.0.0.zip");
-    assertThat(release.asset().url().toString()).endsWith("/download/v2.0.0/Addon-v2.0.0.zip");
+    assertThat(release.asset().url().toString()).endsWith("/api-assets/v2.0.0/Addon-v2.0.0.zip");
     assertThat(release.asset().checksum()).isPresent();
   }
 
