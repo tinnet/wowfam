@@ -51,7 +51,8 @@ For each addon, in dependency order (`depends`):
 4. Refuse folders another addon's lock entry owns. An entry whose addon is no longer in
    `wowfam.toml` doesn't count, so a renamed entry takes its folders over.
 5. Run `pre_install` hooks on the staging folder; a failure stops here.
-6. Delete folders the previous release had and this one doesn't; move the new folders into place.
+6. Delete folders the previous release had and this one doesn't (also when it came from another
+   source); move the new folders into place.
 7. Record the release, asset, checksum and folders in `wowfam.lock`, then run `post_install`.
 
 A run without addon names then uninstalls lock entries whose addon is no longer in `wowfam.toml`:

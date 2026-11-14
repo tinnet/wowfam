@@ -151,7 +151,10 @@ public final class Installer {
   private Outcome installOne(
       Config config, AddonSpec spec, LockFile lock, Mode mode, boolean force) {
     var addonsDir = config.settings().addonsDir();
-    var locked = lock.get(spec.name()).filter(e -> e.source().equals(spec.source().toString()));
+    // An entry from another source (the addon moved to a fork) is a different addon: install anew,
+    // but still clear out the folders it had.
+    var lockedAny = lock.get(spec.name());
+    var locked = lockedAny.filter(e -> e.source().equals(spec.source().toString()));
     var backend = backends.get(spec.source().backend());
     var releases = backend.releases(spec);
     var lockedTag = mode == Mode.INSTALL ? locked.map(LockEntry::tag) : Optional.<String>empty();
@@ -228,7 +231,7 @@ public final class Installer {
             spec.name(),
             lock,
             config.addons().keySet(),
-            locked.map(LockEntry::folders).orElseGet(List::of),
+            lockedAny.map(LockEntry::folders).orElseGet(List::of),
             (staging, unpacked) -> {
               if (!hooks.preInstall().isEmpty()) {
                 hookRunner.run(

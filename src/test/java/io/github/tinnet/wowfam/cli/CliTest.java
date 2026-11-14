@@ -653,4 +653,20 @@ final class CliTest {
     assertThat(addons.resolve("SpokenReadablesAudio")).doesNotExist();
     assertThat(LockFile.read(tmp.resolve("wowfam.lock")).entries()).containsOnlyKeys("spoken");
   }
+
+  @Test
+  void movingToAForkClearsOutFoldersOnlyTheOldReleaseHad() throws Exception {
+    assertThat(run("install", "spoken")).as(err.toString()).isEqualTo(0);
+    assertThat(addons.resolve("SpokenQuests")).isDirectory();
+    github.release("someone/spoken-fork", "spoken/v3.9.0", spoken("3.9.0", false));
+    Files.writeString(
+        config,
+        Files.readString(config)
+            .replace("rusty-key/spoken-wow\"\ntag", "someone/spoken-fork\"\ntag"));
+
+    assertThat(run("install", "spoken")).as(err.toString()).isEqualTo(0);
+
+    assertThat(addons.resolve("Spoken/Spoken.toc")).content().contains("3.9.0");
+    assertThat(addons.resolve("SpokenQuests")).doesNotExist();
+  }
 }

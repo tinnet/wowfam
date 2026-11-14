@@ -106,7 +106,7 @@ while another entry `depends` on the addon.
 
 Editing `wowfam.toml` by hand works too: `wowfam install` and `wowfam update` without addon names
 uninstall whatever is in `wowfam.lock` but no longer in `wowfam.toml`. A renamed entry takes its
-folders over.
+folders over, and an entry moved to another source (a fork) drops folders only the old one had.
 
 ## wowfam.toml
 
