@@ -75,6 +75,18 @@ under prefixed tags. `just poc` installs it into `examples/spoken/AddOns`.
 - **commit-msg**: requires a [Conventional Commit](../AGENTS.md#commits).
 - **pre-push**: checks that every pushed commit is signed.
 
+## GitHub Actions
+
+Every action the workflows use is pinned to a commit in
+[`.github/workflows/actions.lock`](../.github/workflows/actions.lock), a GitHub Actions
+[workflow lockfile](https://gh.io/actions-lockfile): runs use the recorded commit even if the tag
+moves. After adding or changing a `uses:`, run
+[`gh actions-lock`](https://github.com/github/gh-actions-lock) (`gh extension install
+github/gh-actions-lock`) and commit the lockfile with the workflow; CI's `actions-lock` job fails
+otherwise. Dependabot bumps actions weekly, a week after their release, and updates the lockfile
+in the same pull request. `gradle/actions` stays on v5: v6 puts its caching under Gradle's
+proprietary terms of use.
+
 ## Releases
 
 Versions are CalVer, `YYYY.MM.DD` (`YYYY.MM.DD.N` for another release that day); local builds

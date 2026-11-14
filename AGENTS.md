@@ -33,6 +33,8 @@ only when touching the GitHub backend.
 - Formatting is google-java-format; never hand-format, run `just fmt` (the pre-commit hook does).
 - New code that the native image reaches by reflection or resources needs native-image
   configuration; check with `just native` and a run of the binary, not only the JVM tests.
+- Workflow actions are pinned in `.github/workflows/actions.lock`: after changing a `uses:`, run
+  `gh actions-lock` and commit the lockfile with it.
 - Tests use JUnit 6 and AssertJ; properties use Hegel (`@HegelTest`). Tests go in the same commit
   as the change they cover.
 
