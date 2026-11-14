@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFileAttributeView;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -51,12 +52,20 @@ public final class ConfigEditor {
     return text + (text.endsWith("\n\n") ? "" : "\n") + table;
   }
 
-  /** Replaces {@code file} with {@code text} in one move, so a crash leaves one or the other. */
+  /**
+   * Replaces {@code file} with {@code text} in one move, so a crash leaves one or the other. A
+   * symlinked file is written where the link points, and keeps its permissions.
+   */
   public static void write(Path file, String text) {
-    var temp = file.resolveSibling(file.getFileName() + ".tmp");
     try {
+      var target = Files.exists(file) ? file.toRealPath() : file;
+      var temp = target.resolveSibling(target.getFileName() + ".tmp");
       Files.writeString(temp, text);
-      Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+      if (Files.exists(target)
+          && Files.getFileStore(target).supportsFileAttributeView(PosixFileAttributeView.class)) {
+        Files.setPosixFilePermissions(temp, Files.getPosixFilePermissions(target));
+      }
+      Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     } catch (IOException e) {
       throw new ConfigException("cannot write " + file + ": " + e.getMessage(), e);
     }

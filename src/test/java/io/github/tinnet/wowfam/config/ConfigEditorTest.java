@@ -6,10 +6,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import dev.hegel.Generators;
 import dev.hegel.HegelTest;
 import dev.hegel.TestCase;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.io.TempDir;
 
 final class ConfigEditorTest {
 
@@ -78,5 +83,29 @@ final class ConfigEditorTest {
 
     assertThat(read).isNotNull();
     assertThat(read.option("asset")).hasValue(value + "!");
+  }
+
+  @DisabledOnOs(OS.WINDOWS) // symlinks and POSIX permissions
+  @Test
+  void writesThroughASymlinkAndKeepsPermissions(@TempDir Path tmp) throws Exception {
+    var real = Files.createDirectories(tmp.resolve("dotfiles")).resolve("wowfam.toml");
+    Files.writeString(real, "# mine\n");
+    Files.setPosixFilePermissions(real, PosixFilePermissions.fromString("rw-------"));
+    var link = Files.createSymbolicLink(tmp.resolve("wowfam.toml"), real);
+
+    ConfigEditor.write(link, "# changed\n");
+
+    assertThat(link).isSymbolicLink();
+    assertThat(real).content().isEqualTo("# changed\n");
+    assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(real)))
+        .isEqualTo("rw-------");
+    assertThat(tmp.resolve("dotfiles")).isDirectoryNotContaining("glob:**.tmp");
+  }
+
+  @Test
+  void writesAFileThatIsNotThereYet(@TempDir Path tmp) {
+    var file = tmp.resolve("wowfam.toml");
+    ConfigEditor.write(file, "# new\n");
+    assertThat(file).content().isEqualTo("# new\n");
   }
 }
