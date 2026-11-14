@@ -258,3 +258,7 @@ trust store that has its certificate: `wowfam -Djavax.net.ssl.trustStore=/path/t
 [`docs/development.md`](docs/development.md) covers building, testing and releasing;
 [`docs/design.md`](docs/design.md) explains how wowfam works inside. [`AGENTS.md`](AGENTS.md) has
 the working conventions.
+
+## License
+
+[MIT](LICENSE)
