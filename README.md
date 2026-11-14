@@ -89,7 +89,7 @@ recorder. When it can't tell, it says which option to give.
 | `--version V`      | `latest` (default), an exact version, or a prefix such as `3.8`      |
 | `--tag-prefix P`   | only releases tagged `P…`, e.g. `spoken/`                            |
 | `--asset GLOB`     | which zip of a release to install, e.g. `'Polestar_Recorder-*.zip'`  |
-| `--flavor F`       | the game to install for, outside a game folder (see below)           |
+| `--flavor F`       | the game to install for, when AddOns isn't in a WoW install (see below) |
 | `--prerelease`     | consider prereleases                                                 |
 | `-n`, `--dry-run`  | print the entry without changing anything                            |
 | `--no-install`     | only write the entry                                                 |
@@ -132,23 +132,24 @@ Many addons ship one zip that works on every game version. Some ship one per gam
 carry a `release.json` (written by the [BigWigs packager](https://github.com/BigWigsMods/packager))
 that says which zip is for which game.
 
-When `wowfam.toml` sits in a game folder, wowfam knows which game that is from the files the
-Battle.net launcher keeps there, and installs the right zip without any setting. `wowfam list`
-shows what it found:
+When `addons_dir` is inside a WoW install, wowfam knows which game it belongs to from the files
+the Battle.net launcher keeps there, and installs the right zip without any setting. That works
+wherever `wowfam.toml` itself lives. `wowfam list` shows what it found:
 
 ```
 game: wowf 1.60.1.70938 (interface 16001)
 ```
+
+`add` therefore writes no `asset` for such addons. If you point that `wowfam.toml` at an AddOns
+folder outside a WoW install (with `--addons-dir`, say), give them a `flavor`.
 
 After a game patch, an addon that hasn't put out a release for it yet gets the zip for the
 closest earlier version of the same expansion. An addon whose newest release no longer supports
 your game stays on its last release that did, and one that is installed but has no release for
 your game at all (after a new expansion) is left as it is.
 
-`add` in a game folder therefore writes no `asset` for such addons. If you use that
-`wowfam.toml` outside the game folder (with `--addons-dir` elsewhere, say), give them a `flavor`.
-
-Outside a game folder, or to override it, name the game per addon:
+For an AddOns folder outside a WoW install, or to override what was detected, name the game per
+addon:
 
 ```toml
 flavor = "classic_era"   # mainline/retail, classic/classic_era, bcc/tbc, wrath, cata, mists, forever, …
