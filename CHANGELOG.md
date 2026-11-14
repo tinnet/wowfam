@@ -2,7 +2,7 @@
 
 What changed in each wowfam release. Versions are dates (CalVer).
 
-## Unreleased
+## 2026.11.13
 
 ### Features
 
