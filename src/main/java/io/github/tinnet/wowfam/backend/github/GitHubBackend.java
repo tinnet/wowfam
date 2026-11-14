@@ -163,7 +163,7 @@ public final class GitHubBackend implements Backend {
       throw new BackendException(repo + " has no published releases on GitHub");
     }
     var options = new LinkedHashMap<>(spec.options());
-    var prefix = spec.option("tag_prefix").orElseGet(() -> tagPrefix(repo, published));
+    var prefix = spec.option("tag_prefix").orElseGet(() -> tagPrefix(spec, published));
     if (!prefix.isEmpty()) {
       options.put("tag_prefix", prefix);
     }
@@ -181,7 +181,7 @@ public final class GitHubBackend implements Backend {
         target(spec).isPresent()
             && newest.assets().stream().anyMatch(a -> a.name().equals(RELEASE_JSON));
     if (spec.option("asset").isEmpty() && !byFlavor) {
-      options.put("asset", assetPattern(repo, newest, prefix));
+      options.put("asset", assetPattern(spec, newest, prefix));
     }
     return new AddonSpec(
         spec.name(), spec.source(), spec.version(), spec.depends(), options, spec.hooks());
@@ -199,7 +199,8 @@ public final class GitHubBackend implements Backend {
         : prefix;
   }
 
-  private static String tagPrefix(String repo, List<GitHubApi.GitHubRelease> releases) {
+  private static String tagPrefix(AddonSpec spec, List<GitHubApi.GitHubRelease> releases) {
+    var repo = spec.source().reference();
     // Newest first, as GitHub lists them, so each group's first release is its latest.
     var groups = new LinkedHashMap<String, List<GitHubApi.GitHubRelease>>();
     for (var release : releases) {
@@ -222,7 +223,7 @@ public final class GitHubBackend implements Backend {
     // Several things are released from the repository, e.g. an addon and its desktop companion.
     // The addon is the one named like the repository; if that leaves several (a monorepo that
     // moved to a new tag scheme), the one released most recently.
-    var repoName = normalized(repo.substring(repo.indexOf('/') + 1));
+    var repoName = normalized(spec.source().shortName());
     var named =
         groups.entrySet().stream()
             .filter(e -> namedLike(repoName, e.getKey(), e.getValue().getFirst()))
@@ -258,7 +259,9 @@ public final class GitHubBackend implements Backend {
         .anyMatch(stem -> !stem.isEmpty() && repoName.contains(stem));
   }
 
-  private static String assetPattern(String repo, GitHubApi.GitHubRelease release, String prefix) {
+  private static String assetPattern(
+      AddonSpec spec, GitHubApi.GitHubRelease release, String prefix) {
+    var repo = spec.source().reference();
     var zips = release.assets().stream().map(GitHubApi.GitHubAsset::name).filter(n -> isZip(n));
     var version = release.tag().substring(prefix.length());
     var patterns = zips.map(n -> withoutVersion(n, version)).distinct().toList();
@@ -266,7 +269,7 @@ public final class GitHubBackend implements Backend {
       throw new BackendException(
           release.tag() + " of " + repo + " has no zip; set asset to the archive to install");
     }
-    var repoName = normalized(repo.substring(repo.indexOf('/') + 1));
+    var repoName = normalized(spec.source().shortName());
     var chosen =
         patterns.size() == 1
             ? patterns

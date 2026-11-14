@@ -152,18 +152,7 @@ final class AddCommand implements Callable<Integer> {
     }
     var release =
         ReleaseSelector.newest(backend, addon, backend.releases(addon))
-            .orElseThrow(() ->
-                new ConfigException(
-                    "no release of "
-                        + src
-                        + " matches version '"
-                        + version
-                        + "'"
-                        + addon
-                            .option("flavor")
-                            .map(f -> " for flavor '" + f + "'")
-                            .or(() -> game.map(g -> " for " + g))
-                            .orElse("")));
+            .orElseThrow(() -> new ConfigException(ReleaseSelector.noReleaseMessage(addon)));
     try {
       release.asset();
     } catch (BackendException e) {
