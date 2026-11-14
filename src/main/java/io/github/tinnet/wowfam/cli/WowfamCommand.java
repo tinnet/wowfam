@@ -33,6 +33,7 @@ import picocli.CommandLine.ScopeType;
       InstallCommand.class,
       ListCommand.class,
       OutdatedCommand.class,
+      RemoveCommand.class,
       UpdateCommand.class
     })
 public final class WowfamCommand implements Runnable {

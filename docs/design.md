@@ -48,10 +48,17 @@ For each addon, in dependency order (`depends`):
    verify it.
 3. Extract it into a staging folder inside AddOns (same file system, so moves are cheap). The
    extractor refuses entry names that would escape the folder.
-4. Refuse folders another lock entry owns.
+4. Refuse folders another addon's lock entry owns. An entry whose addon is no longer in
+   `wowfam.toml` doesn't count, so a renamed entry takes its folders over.
 5. Run `pre_install` hooks on the staging folder; a failure stops here.
 6. Delete folders the previous release had and this one doesn't; move the new folders into place.
 7. Record the release, asset, checksum and folders in `wowfam.lock`, then run `post_install`.
+
+A run without addon names then uninstalls lock entries whose addon is no longer in `wowfam.toml`:
+their folders are deleted, except ones another entry has taken over, and the entry is dropped.
+`wowfam remove` does the same for the addons it is given, and takes their tables out of
+`wowfam.toml` as text (the table, its sub-tables and the comment paragraph right above). It parses
+the result and only writes it if every other addon, the settings and the hooks come out unchanged.
 
 The lock is written after every addon, even when one fails, so it always says what is on disk.
 Checksums are stored as `<algorithm>:<hex>`; a lock from before that (`sha256 = "<hex>"`) is

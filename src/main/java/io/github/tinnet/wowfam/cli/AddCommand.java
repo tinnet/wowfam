@@ -250,7 +250,7 @@ final class AddCommand implements Callable<Integer> {
       return entries
           .filter(Files::isDirectory)
           .map(p -> p.getFileName().toString())
-          .filter(f -> lock.ownerOf(f).isEmpty())
+          .filter(f -> lock.owners(f).isEmpty())
           .collect(toUnmodifiableSet());
     } catch (IOException e) {
       throw new ConfigException("cannot list " + dir + ": " + e.getMessage(), e);

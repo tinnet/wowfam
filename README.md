@@ -70,6 +70,7 @@ wowfam install            # install everything in wowfam.toml (keeps the version
 wowfam install questie    # one addon, plus whatever it `depends` on
 wowfam outdated           # what update would change
 wowfam update             # move everything to the newest matching release
+wowfam remove questie     # uninstall it and take it out of wowfam.toml
 wowfam list               # what is configured and what is installed
 ```
 
@@ -96,6 +97,16 @@ recorder. When it can't tell, it says which option to give.
 
 If an addon you add is already in AddOns (installed by hand), wowfam replaces it with the release
 and manages it from then on. If installing fails, the entry is taken out of `wowfam.toml` again.
+
+### `wowfam remove`
+
+`wowfam remove NAME…` (or `rm`) deletes the folders the addon installed and takes its table out
+of `wowfam.toml`, keeping the rest of the file as it is. `-n` shows what it would do. It refuses
+while another entry `depends` on the addon.
+
+Editing `wowfam.toml` by hand works too: `wowfam install` and `wowfam update` without addon names
+uninstall whatever is in `wowfam.lock` but no longer in `wowfam.toml`. A renamed entry takes its
+folders over.
 
 ## wowfam.toml
 

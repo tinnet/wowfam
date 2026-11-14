@@ -27,6 +27,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -48,7 +49,9 @@ public final class Installer {
     INSTALLED,
     UPDATED,
     DOWNGRADED,
-    UP_TO_DATE
+    UP_TO_DATE,
+    /** Uninstalled: its folders are deleted and its lock entry is gone. */
+    REMOVED
   }
 
   public record Outcome(
@@ -102,7 +105,47 @@ public final class Installer {
         lock.write();
       }
     }
+    if (names.isEmpty()) {
+      // A run over the whole file makes AddOns match it: an addon that was renamed or taken out
+      // of wowfam.toml by hand is uninstalled.
+      for (var name : List.copyOf(lock.entries().keySet())) {
+        if (!config.addons().containsKey(name)) {
+          log.accept("uninstalling " + name + ", which is no longer in " + config.file());
+          try {
+            outcomes.add(uninstall(settings.addonsDir(), lock, name));
+          } finally {
+            lock.write();
+          }
+        }
+      }
+    }
     return new Report(outcomes, missingDependencies(settings.addonsDir(), lock));
+  }
+
+  /**
+   * Deletes the folders the lock records for {@code addon} and drops its entry; the caller writes
+   * the lock. A folder another entry also records stays: it belongs to that addon now.
+   */
+  public static Outcome uninstall(Path addonsDir, LockFile lock, String addon) {
+    var entry =
+        lock.get(addon)
+            .orElseThrow(() -> new IllegalArgumentException(addon + " is not in the lock"));
+    var deleted = new ArrayList<String>();
+    for (var folder : entry.folders()) {
+      if (lock.owners(folder).stream().anyMatch(o -> !o.equals(addon))) {
+        continue;
+      }
+      try {
+        deleteRecursively(addonsDir.resolve(folder));
+      } catch (IOException e) {
+        throw new InstallException(
+            "cannot delete " + addonsDir.resolve(folder) + ": " + e.getMessage(), e);
+      }
+      deleted.add(folder);
+    }
+    lock.remove(addon);
+    return new Outcome(
+        addon, Status.REMOVED, Optional.of(entry.version()), entry.version(), deleted);
   }
 
   private Outcome installOne(
@@ -184,6 +227,7 @@ public final class Installer {
             addonsDir,
             spec.name(),
             lock,
+            config.addons().keySet(),
             locked.map(LockEntry::folders).orElseGet(List::of),
             (staging, unpacked) -> {
               if (!hooks.preInstall().isEmpty()) {
@@ -282,13 +326,16 @@ public final class Installer {
    * Extracts into a staging folder inside the AddOns directory (same file system, so moves are
    * cheap), calls {@code beforeSwap} with the staging folder and the addon folders in it, then
    * swaps the folders in and removes folders the previous release had but this one does not. If
-   * {@code beforeSwap} throws, the AddOns directory is left as it was.
+   * {@code beforeSwap} throws, the AddOns directory is left as it was. A folder is refused if
+   * another addon of {@code configured} owns it; a lock entry of an addon no longer configured
+   * doesn't count.
    */
   private List<String> unpack(
       Path archive,
       Path addonsDir,
       String addon,
       LockFile lock,
+      Set<String> configured,
       List<String> previousFolders,
       BiConsumer<Path, List<String>> beforeSwap) {
     var staging = addonsDir.resolve(".wowfam-staging-" + addon);
@@ -297,8 +344,11 @@ public final class Installer {
       Files.createDirectories(staging);
       var folders = ZipExtractor.extract(archive, staging);
       for (var folder : folders) {
-        var owner = lock.ownerOf(folder);
-        if (owner.isPresent() && !owner.orElseThrow().equals(addon)) {
+        var owner =
+            lock.owners(folder).stream()
+                .filter(o -> !o.equals(addon) && configured.contains(o))
+                .findFirst();
+        if (owner.isPresent()) {
           throw new InstallException(
               addon
                   + " wants to install folder "

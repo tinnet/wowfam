@@ -7,6 +7,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFileAttributeView;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
@@ -50,6 +51,102 @@ public final class ConfigEditor {
     }
     var text = toml.endsWith("\n") ? toml : toml + "\n";
     return text + (text.endsWith("\n\n") ? "" : "\n") + table;
+  }
+
+  /**
+   * {@code toml} without the {@code [addons.<name>]} table, its sub-tables (such as {@code
+   * [addons.<name>.hooks]}) and the comment lines directly above them. Empty if the file doesn't
+   * hold the addon as such a table (an inline table, or dotted keys under {@code [addons]}).
+   *
+   * <p>Works on lines, not a parse, so everything else stays as written. The caller should parse
+   * the result to check that only the addon went.
+   */
+  public static Optional<String> removeAddon(String toml, String name) {
+    var own =
+        Pattern.compile(
+            "\\s*\\[\\s*addons\\s*\\.\\s*(?:"
+                + Pattern.quote(name)
+                + "|\""
+                + Pattern.quote(name)
+                + "\"|'"
+                + Pattern.quote(name)
+                + "')\\s*(?:\\..*)?\\]\\s*(?:#.*)?");
+    var lines = List.of(toml.split("\n", -1));
+    var drop = new boolean[lines.size()];
+    boolean found = false;
+    for (int i = 0; i < lines.size(); ) {
+      if (!own.matcher(lines.get(i)).matches()) {
+        i++;
+        continue;
+      }
+      found = true;
+      int end = i + 1;
+      while (end < lines.size() && !isHeader(lines.get(end))) {
+        end++;
+      }
+      // Comments right above the next table are about that table, unless it is ours too; the blank
+      // lines before them stay too, and the extra one is collapsed below.
+      int keepFrom = end;
+      if (end < lines.size() && !own.matcher(lines.get(end)).matches()) {
+        while (keepFrom - 1 > i && isComment(lines.get(keepFrom - 1))) {
+          keepFrom--;
+        }
+        while (keepFrom - 1 > i && lines.get(keepFrom - 1).isBlank()) {
+          keepFrom--;
+        }
+      }
+      for (int j = i; j < keepFrom; j++) {
+        drop[j] = true;
+      }
+      // Comments directly above the header describe it, if they form their own paragraph (a
+      // comment line glued to the previous table's last key may be about that key instead).
+      int top = i;
+      while (top > 0 && isComment(lines.get(top - 1)) && !drop[top - 1]) {
+        top--;
+      }
+      if (top < i && (top == 0 || lines.get(top - 1).isBlank())) {
+        for (int j = top; j < i; j++) {
+          drop[j] = true;
+        }
+      }
+      i = end;
+    }
+    if (!found) {
+      return Optional.empty();
+    }
+    var out = new StringBuilder();
+    boolean afterDrop = false;
+    for (int i = 0; i < lines.size(); i++) {
+      if (drop[i]) {
+        afterDrop = true;
+        continue;
+      }
+      // One blank line where the table was, not two.
+      if (afterDrop && lines.get(i).isBlank() && endsWithBlankLine(out)) {
+        continue;
+      }
+      afterDrop &= lines.get(i).isBlank();
+      out.append(lines.get(i)).append('\n');
+    }
+    var text = out.toString().stripTrailing();
+    return Optional.of(text.isEmpty() ? "" : text + "\n");
+  }
+
+  private static boolean endsWithBlankLine(StringBuilder out) {
+    if (out.isEmpty()) {
+      return true; // nothing above: a blank line would start the file
+    }
+    int end = out.length() - 1; // the newline ending the last line
+    int start = out.lastIndexOf("\n", end - 1) + 1;
+    return out.substring(start, end).isBlank();
+  }
+
+  private static boolean isHeader(String line) {
+    return line.stripLeading().startsWith("[");
+  }
+
+  private static boolean isComment(String line) {
+    return line.stripLeading().startsWith("#");
   }
 
   /**

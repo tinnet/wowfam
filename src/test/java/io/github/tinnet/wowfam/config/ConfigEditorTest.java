@@ -108,4 +108,104 @@ final class ConfigEditorTest {
     ConfigEditor.write(file, "# new\n");
     assertThat(file).content().isEqualTo("# new\n");
   }
+
+  @Test
+  void removesAnAddonsTablesAndTheCommentAboveIt() {
+    var original =
+        """
+        # my addons
+        [settings]
+        addons_dir = "Interface/AddOns"
+        # cache_dir = "cache"
+        [addons.questie]
+        source = "github:Questie/Questie"
+
+        # the voice-over player
+        # (needs the audio packs below)
+        [addons.spoken]
+        source = "github:rusty-key/spoken-wow"
+        tag_prefix = "spoken/"
+
+        [addons.spoken.hooks]
+        post_install = ["echo hi"]
+
+        # sound packs
+        [addons."audio"]
+        source = "github:rusty-key/spoken-wow"
+        """;
+
+    assertThat(ConfigEditor.removeAddon(original, "spoken"))
+        .hasValue(
+            """
+            # my addons
+            [settings]
+            addons_dir = "Interface/AddOns"
+            # cache_dir = "cache"
+            [addons.questie]
+            source = "github:Questie/Questie"
+
+            # sound packs
+            [addons."audio"]
+            source = "github:rusty-key/spoken-wow"
+            """);
+    // A comment glued to the end of the previous table may be about that table: it stays.
+    assertThat(ConfigEditor.removeAddon(original, "questie"))
+        .hasValueSatisfying(text ->
+            assertThat(text)
+                .contains("# cache_dir = \"cache\"\n\n# the voice-over player")
+                .doesNotContain("Questie"));
+    assertThat(ConfigEditor.removeAddon(original, "audio"))
+        .hasValueSatisfying(text ->
+            assertThat(text).endsWith("post_install = [\"echo hi\"]\n").doesNotContain("sound"));
+  }
+
+  @Test
+  void removingTheOnlyAddonLeavesTheRest() {
+    assertThat(ConfigEditor.removeAddon("[addons.a]\nsource = \"o/a\"\n", "a")).hasValue("");
+    assertThat(
+            ConfigEditor.removeAddon(
+                "[settings]\ncache_dir = \"c\"\n\n\n[addons.a]\nsource = \"o/a\"\n", "a"))
+        .hasValue("[settings]\ncache_dir = \"c\"\n");
+  }
+
+  @Test
+  void anAddonThatIsNotATableCannotBeRemoved() {
+    assertThat(ConfigEditor.removeAddon("[addons]\na = { source = \"o/a\" }\n", "a")).isEmpty();
+    assertThat(ConfigEditor.removeAddon("[addons.ab]\nsource = \"o/a\"\n", "a")).isEmpty();
+  }
+
+  @HegelTest
+  void removingOneAddonKeepsEveryOther(TestCase tc) {
+    int count = tc.draw(Generators.integers().min(1).max(5), "count");
+    var toml = new StringBuilder("[settings]\ncache_dir = \"c\"\n");
+    for (int i = 0; i < count; i++) {
+      if (tc.draw(Generators.booleans(), "comment")) {
+        toml.append(tc.draw(Generators.booleans(), "blank") ? "\n" : "")
+            .append("# about a")
+            .append(i)
+            .append('\n');
+      } else {
+        toml.append('\n');
+      }
+      toml.append("[addons.a")
+          .append(i)
+          .append("]\nsource = \"github:o/a")
+          .append(i)
+          .append("\"\n");
+      if (tc.draw(Generators.booleans(), "hooks")) {
+        toml.append("[addons.a").append(i).append(".hooks]\npost_install = [\"true\"]\n");
+      }
+    }
+    int gone = tc.draw(Generators.integers().min(0).max(count - 1), "gone");
+
+    var edited = ConfigEditor.removeAddon(toml.toString(), "a" + gone);
+
+    assertThat(edited).isPresent();
+    var before = parse(toml.toString()).addons();
+    var after = parse(edited.orElseThrow()).addons();
+    var expected = new java.util.LinkedHashMap<>(before);
+    expected.remove("a" + gone);
+    assertThat(after).containsExactlyEntriesOf(expected);
+    assertThat(edited.orElseThrow()).doesNotContain("\n\n\n");
+  }
 }

@@ -48,8 +48,8 @@ final class LockFileTest {
     assertThat(reread.entries())
         .containsEntry("spoken", spoken)
         .containsEntry("spoken-readables-audio", audio);
-    assertThat(reread.ownerOf("Spoken_Quests")).hasValue("spoken");
-    assertThat(reread.ownerOf("Unknown")).isEmpty();
+    assertThat(reread.owners("Spoken_Quests")).containsExactly("spoken");
+    assertThat(reread.owners("Unknown")).isEmpty();
   }
 
   @Test

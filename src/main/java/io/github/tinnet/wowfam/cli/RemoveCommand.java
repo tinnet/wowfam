@@ -1,0 +1,163 @@
+package io.github.tinnet.wowfam.cli;
+
+import io.github.tinnet.wowfam.config.Config;
+import io.github.tinnet.wowfam.config.ConfigEditor;
+import io.github.tinnet.wowfam.config.ConfigException;
+import io.github.tinnet.wowfam.config.ConfigLoader;
+import io.github.tinnet.wowfam.install.Installer;
+import io.github.tinnet.wowfam.lock.LockFile;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Model.CommandSpec;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
+import picocli.CommandLine.ParentCommand;
+import picocli.CommandLine.Spec;
+
+@Command(
+    name = "remove",
+    aliases = {"rm", "uninstall"},
+    mixinStandardHelpOptions = true,
+    description = {
+      "Uninstall addons and take them out of wowfam.toml.",
+      "With each addon go the folders wowfam.lock records for it, its lock entry and its table in "
+          + "wowfam.toml (comments and layout of the rest of the file are kept)."
+    })
+final class RemoveCommand implements Callable<Integer> {
+
+  @ParentCommand WowfamCommand root;
+
+  @Spec CommandSpec spec;
+
+  @Parameters(arity = "1..*", paramLabel = "ADDON", description = "Addon names from wowfam.toml.")
+  List<String> addons = new ArrayList<>();
+
+  @Option(
+      names = {"-n", "--dry-run"},
+      description = "Print what would be removed without changing anything.")
+  boolean dryRun;
+
+  @Override
+  public Integer call() {
+    var config = root.loadConfig();
+    var lock = LockFile.read(config.lockFile());
+    var names = new LinkedHashSet<>(addons);
+    for (var name : names) {
+      if (!config.addons().containsKey(name) && lock.get(name).isEmpty()) {
+        throw new ConfigException(
+            "no addon named '" + name + "' in " + config.file() + " or " + lock.path());
+      }
+    }
+    for (var other : config.addons().values()) {
+      if (names.contains(other.name())) {
+        continue;
+      }
+      for (var dep : other.depends()) {
+        if (names.contains(dep)) {
+          throw new ConfigException(
+              other.name()
+                  + " depends on "
+                  + dep
+                  + "; remove "
+                  + other.name()
+                  + " too, or take "
+                  + dep
+                  + " out of its depends");
+        }
+      }
+    }
+    var edited = withoutEntries(config, names);
+
+    var out = spec.commandLine().getOut();
+    if (dryRun) {
+      for (var name : names) {
+        lock.get(name)
+            .ifPresent(e ->
+                out.printf(
+                    "would uninstall %s %s  (%s)%n",
+                    name, e.version(), String.join(", ", e.folders())));
+        if (config.addons().containsKey(name)) {
+          out.printf("would remove addons.%s from %s%n", name, config.file());
+        }
+      }
+      return 0;
+    }
+
+    // Folders first: if one can't be deleted (the game has a file open), wowfam.toml still lists
+    // the addon, and running remove again finishes the job.
+    var outcomes = new ArrayList<Installer.Outcome>();
+    for (var name : names) {
+      if (lock.get(name).isPresent()) {
+        try {
+          outcomes.add(Installer.uninstall(config.settings().addonsDir(), lock, name));
+        } finally {
+          lock.write();
+        }
+      } else {
+        out.printf("%s was not installed%n", name);
+      }
+    }
+    if (!edited.equals(read(config))) {
+      ConfigEditor.write(config.file(), edited);
+    }
+    Reports.print(spec, new Installer.Report(outcomes, Map.of()));
+    names.stream()
+        .filter(config.addons()::containsKey)
+        .forEach(name -> out.printf("removed addons.%s from %s%n", name, config.file()));
+    return 0;
+  }
+
+  /**
+   * The text of wowfam.toml without the named entries, checked by parsing it: every other addon,
+   * the settings and the hooks must come out exactly as before.
+   */
+  private static String withoutEntries(Config config, Iterable<String> names) {
+    var original = read(config);
+    var text = original;
+    for (var name : names) {
+      if (!config.addons().containsKey(name)) {
+        continue;
+      }
+      text =
+          ConfigEditor.removeAddon(text, name)
+              .orElseThrow(() ->
+                  new ConfigException(
+                      "cannot find the [addons."
+                          + name
+                          + "] table in "
+                          + config.file()
+                          + "; take the entry out by hand"));
+    }
+    var loader = new ConfigLoader();
+    var before = loader.parse(config.file(), original);
+    var after = loader.parse(config.file(), text);
+    var expected = new LinkedHashMap<>(before.addons());
+    names.forEach(expected::remove);
+    if (!after.addons().equals(expected)
+        || !after.settings().equals(before.settings())
+        || !after.hooks().equals(before.hooks())) {
+      throw new ConfigException(
+          "cannot remove addons."
+              + String.join(", addons.", names)
+              + " from "
+              + config.file()
+              + " without changing other entries; take it out by hand");
+    }
+    return text;
+  }
+
+  private static String read(Config config) {
+    try {
+      return Files.readString(config.file());
+    } catch (IOException e) {
+      throw new ConfigException("cannot read " + config.file() + ": " + e.getMessage(), e);
+    }
+  }
+}

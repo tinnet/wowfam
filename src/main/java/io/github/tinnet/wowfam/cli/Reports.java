@@ -21,6 +21,14 @@ final class Reports {
                 o.previousVersion().orElse("?"),
                 o.version(),
                 String.join(", ", o.folders()));
+        case REMOVED ->
+            out.printf(
+                "- %s %s  (%s)%n",
+                o.addon(),
+                o.version(),
+                o.folders().isEmpty()
+                    ? "its folders belong to another addon now"
+                    : String.join(", ", o.folders()));
         case UP_TO_DATE -> {}
       }
     }

@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
@@ -117,12 +118,15 @@ public final class LockFile {
     entries.remove(addon);
   }
 
-  /** Which addon in this lock owns {@code folder}, if any. */
-  public Optional<String> ownerOf(String folder) {
+  /**
+   * The addons in this lock that own {@code folder}. Normally at most one; an entry left behind by
+   * a renamed or deleted addon can share a folder with the addon that took it over.
+   */
+  public List<String> owners(String folder) {
     return entries.entrySet().stream()
         .filter(e -> e.getValue().folders().contains(folder))
-        .findFirst()
-        .map(Map.Entry::getKey);
+        .map(Map.Entry::getKey)
+        .toList();
   }
 
   /** One {@code [addons.<name>]} table per addon, sorted by name, so diffs stay small. */

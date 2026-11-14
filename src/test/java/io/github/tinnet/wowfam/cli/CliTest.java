@@ -564,4 +564,93 @@ final class CliTest {
     assertThat(run("add", "someone/bars", "--name", "again", "-n")).isEqualTo(1);
     assertThat(err.toString()).contains("is already in", "as addons.old");
   }
+
+  @Test
+  void removeUninstallsAnAddonAndTakesItOutOfTheConfig() throws Exception {
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+    var before = Files.readString(config);
+
+    assertThat(run("remove", "spoken")).isEqualTo(1);
+    assertThat(err.toString())
+        .contains("spoken-readables-audio depends on spoken; remove spoken-readables-audio too");
+
+    assertThat(run("remove", "spoken-readables-audio", "--dry-run")).isEqualTo(0);
+    assertThat(out.toString())
+        .contains(
+            "would uninstall spoken-readables-audio 2.3.0  (SpokenReadablesAudio)",
+            "would remove addons.spoken-readables-audio from");
+    assertThat(config).content().isEqualTo(before);
+    assertThat(addons.resolve("SpokenReadablesAudio")).isDirectory();
+
+    assertThat(run("rm", "spoken-readables-audio")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString())
+        .contains(
+            "- spoken-readables-audio 2.3.0  (SpokenReadablesAudio)",
+            "removed addons.spoken-readables-audio from");
+    assertThat(addons.resolve("SpokenReadablesAudio")).doesNotExist();
+    assertThat(addons.resolve("Spoken")).isDirectory();
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock")).entries()).containsOnlyKeys("spoken");
+    assertThat(config)
+        .content()
+        .isEqualTo(
+            """
+            [settings]
+            addons_dir = "Interface/AddOns"
+            cache_dir = "cache"
+
+            [addons.spoken]
+            source = "github:rusty-key/spoken-wow"
+            tag_prefix = "spoken/"
+            asset = "Spoken-*.zip"
+            """);
+
+    assertThat(run("remove", "spoken-readables-audio")).isEqualTo(1);
+    assertThat(err.toString()).contains("no addon named 'spoken-readables-audio'");
+  }
+
+  @Test
+  void removeTakesOutAnEntryThatWasNeverInstalled() throws Exception {
+    assertThat(run("install", "spoken")).as(err.toString()).isEqualTo(0);
+    assertThat(run("remove", "spoken-readables-audio")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString()).contains("spoken-readables-audio was not installed");
+    assertThat(config).content().doesNotContain("readables");
+  }
+
+  @Test
+  void aRenamedEntryTakesOverItsFoldersAndTheOldNameIsDropped() throws Exception {
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+    Files.writeString(
+        config,
+        Files.readString(config)
+            .replace("[addons.spoken]", "[addons.player]")
+            .replace("depends = [\"spoken\"]", "depends = [\"player\"]"));
+
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock")).entries())
+        .containsOnlyKeys("player", "spoken-readables-audio");
+    assertThat(out.toString())
+        .contains("✓ player 3.8.4", "- spoken 3.8.4  (its folders belong to another addon now)");
+    assertThat(addons.resolve("Spoken/Spoken.toc")).exists();
+  }
+
+  @Test
+  void anEntryDeletedByHandIsUninstalledByTheNextFullRun() throws Exception {
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+    var full = Files.readString(config);
+    Files.writeString(
+        config, full.substring(0, full.indexOf("[addons.spoken-readables-audio]")).strip() + "\n");
+
+    // Naming addons only touches those.
+    assertThat(run("install", "spoken")).as(err.toString()).isEqualTo(0);
+    assertThat(addons.resolve("SpokenReadablesAudio")).isDirectory();
+
+    assertThat(run("update")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString())
+        .contains(
+            "uninstalling spoken-readables-audio, which is no longer in",
+            "- spoken-readables-audio 2.3.0  (SpokenReadablesAudio)");
+    assertThat(addons.resolve("SpokenReadablesAudio")).doesNotExist();
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock")).entries()).containsOnlyKeys("spoken");
+  }
 }
