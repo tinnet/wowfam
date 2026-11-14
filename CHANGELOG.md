@@ -2,6 +2,28 @@
 
 What changed in each wowfam release. Versions are dates (CalVer).
 
+## 2026.11.14
+
+### Features
+
+- **cli**: Add wowfam remove, and uninstall addons taken out of wowfam.toml ([89c212b](https://github.com/tinnet/wowfam/commit/89c212b565f0b68df527745b2244a4476bdcac37))
+- **cli**: **breaking:** One global config with all your games, and wowfam init to find them ([0d54e96](https://github.com/tinnet/wowfam/commit/0d54e96881b6be15cd1451256767a90734824a10))
+
+### Fixes
+
+- **install**: Report a version no release has instead of keeping the installed one ([333a6d0](https://github.com/tinnet/wowfam/commit/333a6d030e847fdc20b5643a069ed38efbd11bf1))
+- **install**: Reinstall when the zip for the locked release changes ([d92d3dc](https://github.com/tinnet/wowfam/commit/d92d3dca79001aa6905e07b0e1c24d29c2b5501e))
+- **config**: Reject addon names that aren't plain folder names ([2eb58d1](https://github.com/tinnet/wowfam/commit/2eb58d16b9a93a0542d6eaa4eeae5be1c3c8bf7f))
+- **install**: Read .toc files that aren't UTF-8 or start with a BOM ([f712d36](https://github.com/tinnet/wowfam/commit/f712d367a1830108d6831b9ead6773cc86aba01a))
+- **cli**: Print an error, not a stack trace, for a bad lock or a non-GitHub answer ([26e6b30](https://github.com/tinnet/wowfam/commit/26e6b30dfaaf90d898c30e0b4a01080f5a539367))
+- **github**: Download assets through the API so private repositories work ([07afa86](https://github.com/tinnet/wowfam/commit/07afa86612081bfaa9d75e36fde6e5a31629ef86))
+- **install**: Remove the old folders when an addon moves to another source ([d7afa8b](https://github.com/tinnet/wowfam/commit/d7afa8b5e4a94a727f4601107e65aeaa72c0c397))
+
+### Documentation
+
+- Say game detection follows addons_dir, not where wowfam.toml is ([daca488](https://github.com/tinnet/wowfam/commit/daca488aef9ff6a0bc938e569765ae64eba04ba9))
+- License wowfam under MIT ([13e6cd4](https://github.com/tinnet/wowfam/commit/13e6cd4afece9dbc40b57c95364afad38a98e6c5))
+
 ## 2026.11.13
 
 ### Features
