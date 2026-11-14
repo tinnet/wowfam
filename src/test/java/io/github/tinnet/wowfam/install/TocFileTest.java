@@ -1,5 +1,6 @@
 package io.github.tinnet.wowfam.install;
 
+import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Files;
@@ -41,5 +42,19 @@ final class TocFileTest {
         .hasSize(2)
         .flatExtracting(t -> t.requiredDependencies().stream().toList())
         .containsOnly("Spoken", "SpokenVanillaOnly");
+  }
+
+  @Test
+  void readsLatin1AndByteOrderMarks(@TempDir Path tmp) throws Exception {
+    var dir = Files.createDirectory(tmp.resolve("Old"));
+    // Latin-1, which isn't valid UTF-8, starting with a UTF-8 byte-order mark.
+    var bytes = new java.io.ByteArrayOutputStream();
+    bytes.write(new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF});
+    bytes.write("## Dependencies: Lib\n## Title-deDE: \u00dcber\n".getBytes(ISO_8859_1));
+    Files.write(dir.resolve("Old.toc"), bytes.toByteArray());
+
+    assertThat(TocFile.readAll(dir))
+        .singleElement()
+        .satisfies(t -> assertThat(t.requiredDependencies()).containsExactly("Lib"));
   }
 }
