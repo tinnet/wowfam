@@ -110,10 +110,14 @@ final class AddCommand implements Callable<Integer> {
     var config = root.loadConfig();
     var src = Source.fromInput(source);
     var addonName = name != null ? name : defaultName(src);
+    if (!ConfigEditor.NAME.matcher(addonName).matches()) {
+      throw new ConfigException(
+          "'" + addonName + "' cannot be an addon name: use letters, digits, - and _");
+    }
     var taken = config.addons().get(addonName);
     if (taken != null) {
       throw new ConfigException(
-          taken.source().equals(src)
+          taken.source().sameAs(src)
               ? src + " is already in " + config.file() + " as addons." + addonName
               : "addons."
                   + addonName
@@ -139,7 +143,7 @@ final class AddCommand implements Callable<Integer> {
     var backend = backends.get(src.backend());
     var addon = backend.discover(new AddonSpec(addonName, src, version, List.of(), options));
     for (var existing : config.addons().values()) {
-      if (existing.source().equals(addon.source())
+      if (existing.source().sameAs(addon.source())
           && existing.option("tag_prefix").equals(addon.option("tag_prefix"))
           && existing.option("flavor").equals(addon.option("flavor"))
           // Without an asset the existing entry takes any zip; with one, a different asset is a
@@ -189,6 +193,7 @@ final class AddCommand implements Callable<Integer> {
 
     var updated = root.loadConfig();
     var unmanaged = unmanagedFolders(updated);
+    var lockedBefore = LockFile.read(updated.lockFile()).get(addonName);
     Installer.Report report;
     try {
       report =
@@ -197,8 +202,9 @@ final class AddCommand implements Callable<Integer> {
     } catch (RuntimeException e) {
       // Keep wowfam.toml and the AddOns folder in step: an addon that did not get installed (a
       // failed download, a pre_install hook saying no) is taken out again. One that did, but whose
-      // post_install hook failed, is locked and stays.
-      if (LockFile.read(updated.lockFile()).get(addonName).isEmpty()) {
+      // post_install hook failed, is locked and stays. A lock entry left over from an earlier
+      // addon of the same name doesn't count: only one this run wrote does.
+      if (LockFile.read(updated.lockFile()).get(addonName).equals(lockedBefore)) {
         ConfigEditor.write(config.file(), original);
         spec.commandLine().getErr().println("not installed, so not added to " + config.file());
       }

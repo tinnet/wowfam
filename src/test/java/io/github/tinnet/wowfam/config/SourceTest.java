@@ -24,6 +24,13 @@ final class SourceTest {
   }
 
   @Test
+  void sourcesDifferingOnlyInCaseAreTheSame() {
+    var questie = Source.parse("github:Questie/Questie");
+    assertThat(questie.sameAs(Source.parse("github:questie/questie"))).isTrue();
+    assertThat(questie.sameAs(Source.parse("github:questie/questie-db"))).isFalse();
+  }
+
+  @Test
   void rejectsWhatIsNeitherASourceNorARepository() {
     assertThatThrownBy(() -> Source.fromInput("polestar"))
         .isInstanceOf(ConfigException.class)

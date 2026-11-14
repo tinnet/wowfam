@@ -416,6 +416,9 @@ final class CliTest {
         .contains("github:fitzforge/polestar is already in", "as addons.polestar");
     assertThat(run("add", "fitzforge/polestar")).isEqualTo(1);
     assertThat(err.toString()).contains("github:fitzforge/polestar is already in");
+    // GitHub names are case-insensitive.
+    assertThat(run("add", "FitzForge/Polestar")).isEqualTo(1);
+    assertThat(err.toString()).contains("is already in", "as addons.polestar");
     assertThat(run("add", "o/other", "--name", "polestar")).isEqualTo(1);
     assertThat(err.toString()).contains("addons.polestar is already in", "pick another --name");
   }
@@ -453,14 +456,28 @@ final class CliTest {
 
   @Test
   void addTakesTheEntryOutAgainWhenTheInstallFails() throws Exception {
-    withHooks("[hooks]\npre_install = 'exit 3'");
-    var before = Files.readString(config);
+    // An earlier addon of the same name, taken out of wowfam.toml but still in the lock, must not
+    // make the failed add look installed.
+    var original = Files.readString(config);
+    github.release("o/old", "v1.0", addonZip("Old-1.0.zip", "1.0", Map.of("Old", "")));
+    assertThat(run("add", "o/old", "--name", "thing")).as(err.toString()).isEqualTo(0);
+    Files.writeString(config, original);
     github.release("o/thing", "v1.0", addonZip("Thing-1.0.zip", "1.0", Map.of("Thing", "")));
 
+    withHooks("[hooks]\npre_install = 'exit 3'");
+    var before = Files.readString(config);
     assertThat(run("add", "o/thing")).isEqualTo(1);
     assertThat(err.toString())
         .contains("not installed, so not added to", "pre_install hook for thing failed");
     assertThat(config).content().isEqualTo(before);
+  }
+
+  @Test
+  void addRejectsABadNameBeforeAskingGitHub() {
+    int requests = github.requests().size();
+    assertThat(run("add", "o/thing", "--name", "my addon")).isEqualTo(1);
+    assertThat(err.toString()).contains("'my addon' cannot be an addon name");
+    assertThat(github.requests()).hasSize(requests);
   }
 
   @Test

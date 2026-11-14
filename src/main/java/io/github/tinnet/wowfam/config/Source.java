@@ -53,6 +53,14 @@ public record Source(String backend, String reference) {
     return reference.substring(reference.lastIndexOf('/') + 1);
   }
 
+  /**
+   * Whether {@code other} is the same source, ignoring case: GitHub owner and repository names are
+   * case-insensitive, so {@code Questie/Questie} is {@code questie/questie}.
+   */
+  public boolean sameAs(Source other) {
+    return backend.equalsIgnoreCase(other.backend) && reference.equalsIgnoreCase(other.reference);
+  }
+
   @Override
   public String toString() {
     return backend + ":" + reference;
