@@ -105,7 +105,10 @@ version's first three numbers give the interface number addons declare in `## In
 The loader then gives every addon without a `flavor` or `interface` of its own an `interface`
 option. The option isn't written to `wowfam.toml`; it is derived on every load, so the file stays
 correct when the game updates. `release.json` entries match it on major and minor version
-(`interface / 100`), so 11509 still takes a zip built for 11508.
+(`interface / 100`), so 11509 still takes a zip built for 11508. When no entry does (the game was
+patched to 11.2 and the addon still ships 11.1), the entry for the closest earlier minor version
+of the same major wins; a zip for a later version or another major is never taken. If even that
+finds nothing and the addon is installed, `install` and `update` keep it rather than fail.
 
 Product codes (`wow`, `wow_classic_era`, `wowf`, …) are deliberately not mapped to the packager's
 flavor names: the mapping changes as Blizzard reuses products for new expansions, and the interface

@@ -140,7 +140,10 @@ shows what it found:
 game: wowf 1.60.1.70938 (interface 16001)
 ```
 
-An addon whose newest release no longer supports your game stays on its last release that did.
+After a game patch, an addon that hasn't put out a release for it yet gets the zip for the
+closest earlier version of the same expansion. An addon whose newest release no longer supports
+your game stays on its last release that did, and one that is installed but has no release for
+your game at all (after a new expansion) is left as it is.
 
 Outside a game folder, or to override it, name the game per addon:
 

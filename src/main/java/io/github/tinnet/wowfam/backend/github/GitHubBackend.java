@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Predicate;
+import java.util.function.ToIntFunction;
 import java.util.regex.Pattern;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -45,9 +45,9 @@ import tools.jackson.databind.json.JsonMapper;
  *       lists for the flavor, and is passed over if it lists none; {@code asset}, if given, still
  *       has to match. Releases without a {@code release.json} are picked by {@code asset} alone.
  *   <li>{@code interface} — like {@code flavor}, but by the {@code ## Interface} number of the game
- *       ({@code 16001}); a release.json entry for the same major and minor version matches. Set
- *       from the game folder when the AddOns folder is inside a WoW install and {@code flavor} is
- *       not given.
+ *       ({@code 16001}); the release.json entry for the same major and minor version matches, or
+ *       else the one for the closest earlier minor version of the same major. Set from the game
+ *       folder when the AddOns folder is inside a WoW install and {@code flavor} is not given.
  *   <li>{@code nolib} — with {@code flavor}: {@code true} to take the packager's {@code -nolib} zip
  *       rather than the one with libraries embedded, default {@code false}.
  * </ul>
@@ -358,16 +358,24 @@ public final class GitHubBackend implements Backend {
               + e.getOriginalMessage(),
           e);
     }
+    // Each entry is ranked by how well it fits the game; only the best fitting ones are kept.
     var names = new LinkedHashSet<String>();
+    int best = Target.NO_MATCH;
     for (var entry : manifest.path("releases")) {
       var filename = entry.path("filename").asString("");
-      boolean forFlavor = false;
-      for (var metadata : entry.path("metadata")) {
-        forFlavor |= target.orElseThrow().matches().test(metadata);
+      if (entry.path("nolib").asBoolean(false) != nolib
+          || assetGlob.filter(g -> !g.matches(filename)).isPresent()) {
+        continue;
       }
-      if (forFlavor
-          && entry.path("nolib").asBoolean(false) == nolib
-          && assetGlob.filter(g -> !g.matches(filename)).isEmpty()) {
+      int rank = Target.NO_MATCH;
+      for (var metadata : entry.path("metadata")) {
+        rank = Math.max(rank, target.orElseThrow().rank().applyAsInt(metadata));
+      }
+      if (rank > best) {
+        best = rank;
+        names.clear();
+      }
+      if (rank == best && rank != Target.NO_MATCH) {
         names.add(filename);
       }
     }
@@ -394,15 +402,22 @@ public final class GitHubBackend implements Backend {
   /**
    * What an entry of {@code release.json} has to be for: the {@code flavor} the user named, else
    * the {@code interface} of the game the AddOns folder belongs to.
+   *
+   * @param rank how well an entry's metadata fits, higher is better, {@link #NO_MATCH} for not at
+   *     all
    */
-  record Target(String description, Predicate<JsonNode> matches) {}
+  record Target(String description, ToIntFunction<JsonNode> rank) {
+    static final int NO_MATCH = -1;
+  }
 
   static Optional<Target> target(AddonSpec spec) {
     var flavor = spec.option("flavor").map(GitHubBackend::canonicalFlavor);
     if (flavor.isPresent()) {
       var f = flavor.orElseThrow();
       return Optional.of(
-          new Target("flavor '" + f + "'", m -> m.path("flavor").asString("").equalsIgnoreCase(f)));
+          new Target(
+              "flavor '" + f + "'",
+              m -> m.path("flavor").asString("").equalsIgnoreCase(f) ? 0 : Target.NO_MATCH));
     }
     return spec.option("interface")
         .map(i -> {
@@ -417,10 +432,22 @@ public final class GitHubBackend implements Backend {
                     + i
                     + "'");
           }
-          // The same major and minor version: a game patch must not leave every addon behind.
-          return new Target(
-              "interface " + wanted, m -> m.path("interface").asInt(-1) / 100 == wanted / 100);
+          return new Target("interface " + wanted, m -> interfaceRank(wanted, m));
         });
+  }
+
+  /**
+   * How well a zip built for {@code metadata}'s interface fits a game of interface {@code wanted}.
+   * The same major and minor version is best (11509 takes 11508). After a game patch an addon that
+   * has not caught up is still installed, from the zip for the closest earlier minor version of the
+   * same major (11.2 takes 11.1); a zip for a later version or another major never is.
+   */
+  static int interfaceRank(int wanted, JsonNode metadata) {
+    int built = metadata.path("interface").asInt(-1);
+    if (built <= 0 || built / 10_000 != wanted / 10_000 || built / 100 > wanted / 100) {
+      return Target.NO_MATCH;
+    }
+    return built / 100;
   }
 
   /** The packager's name for a flavor: {@code retail} is {@code mainline}, and so on. */

@@ -23,6 +23,7 @@ import java.util.Optional;
 import java.util.function.Function;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
 
 final class GitHubBackendTest {
 
@@ -91,7 +92,12 @@ final class GitHubBackendTest {
     assertThat(picked.apply(Map.of("interface", "11509"))).isEqualTo("Addon-v2.0.0-classic.zip");
     assertThat(picked.apply(Map.of("interface", "20506"))).isEqualTo("Addon-v2.0.0-classic.zip");
     assertThat(picked.apply(Map.of("interface", "120107"))).isEqualTo("Addon-v2.0.0.zip");
-    assertThat(picked.apply(Map.of("interface", "11600"))).isEqualTo("(none)");
+    // After a patch the addon hasn't caught up with: the closest earlier version of that major.
+    assertThat(picked.apply(Map.of("interface", "120200"))).isEqualTo("Addon-v2.0.0.zip");
+    assertThat(picked.apply(Map.of("interface", "20600"))).isEqualTo("Addon-v2.0.0-classic.zip");
+    // Never a zip for a later version, or for another major.
+    assertThat(picked.apply(Map.of("interface", "120004"))).isEqualTo("(none)");
+    assertThat(picked.apply(Map.of("interface", "30405"))).isEqualTo("(none)");
     // A flavor named in wowfam.toml wins over the game's interface.
     assertThat(picked.apply(Map.of("interface", "120105", "flavor", "classic")))
         .isEqualTo("Addon-v2.0.0-classic.zip");
@@ -99,6 +105,22 @@ final class GitHubBackendTest {
         .hasMessageContaining("interface must be a number");
     // One listing serves them all.
     assertThat(github.requests()).filteredOn(r -> r.contains("/repos/")).hasSize(1);
+  }
+
+  @HegelTest
+  void anInterfaceNeverTakesAZipForALaterVersionOrAnotherMajor(TestCase tc) {
+    int wanted = tc.draw(Generators.integers().min(10_000).max(200_000));
+    int built = tc.draw(Generators.integers().min(10_000).max(200_000));
+    var metadata = JsonMapper.builder().build().readTree("{\"interface\": " + built + "}");
+
+    int rank = GitHubBackend.interfaceRank(wanted, metadata);
+
+    if (built / 10_000 != wanted / 10_000 || built / 100 > wanted / 100) {
+      assertThat(rank).isEqualTo(GitHubBackend.Target.NO_MATCH);
+    } else {
+      // Closer is better: the rank is the zip's major and minor version.
+      assertThat(rank).isEqualTo(built / 100);
+    }
   }
 
   @Test

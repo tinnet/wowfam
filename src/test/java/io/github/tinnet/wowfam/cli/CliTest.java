@@ -273,6 +273,38 @@ final class CliTest {
         .contains("no release of bars", "matches version 'latest' for flavor 'cata'");
   }
 
+  @Test
+  void anInstalledAddonStaysWhenNoReleaseIsForTheGameAnyMore() throws Exception {
+    Files.writeString(
+        config,
+        """
+        [settings]
+        addons_dir = "Interface/AddOns"
+        cache_dir = "cache"
+
+        [addons.bars]
+        source = "github:someone/bars"
+        interface = "11508"
+        """);
+    github.release(
+        "someone/bars",
+        "v1.0.0",
+        addonZip("Bars-v1.0.0.zip", "1.0.0", Map.of("Bars", "")),
+        FakeGitHub.releaseJson(Map.of("Bars-v1.0.0.zip", List.of("classic"))));
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+
+    // The game moves to another expansion the addon has no zip for.
+    Files.writeString(config, Files.readString(config).replace("11508", "50503"));
+    assertThat(run("update")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString()).contains("no release of bars is for interface 50503; keeping 1.0.0");
+    assertThat(addons.resolve("Bars/Bars.toc")).content().contains("## Version: 1.0.0");
+
+    // Not installed, there is nothing to keep: that is still an error.
+    Files.writeString(config, Files.readString(config).replace("[addons.bars]", "[addons.bars2]"));
+    assertThat(run("install", "bars2")).isEqualTo(1);
+    assertThat(err.toString()).contains("matches version 'latest' for interface 50503");
+  }
+
   private void withHooks(String hooks) throws Exception {
     Files.writeString(
         config, Files.readString(config).replace("[addons.spoken]", hooks + "\n[addons.spoken]"));

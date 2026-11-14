@@ -112,29 +112,40 @@ public final class Installer {
     var backend = backends.get(spec.source().backend());
     var releases = backend.releases(spec);
     var lockedTag = mode == Mode.INSTALL ? locked.map(LockEntry::tag) : Optional.<String>empty();
-    var release =
-        ReleaseSelector.preferLocked(backend, spec, releases, lockedTag)
-            .orElseThrow(() ->
-                new InstallException(
-                    "no release of "
-                        + spec.name()
-                        + " ("
-                        + spec.source()
-                        + ") matches version '"
-                        + spec.version()
-                        + "'"
-                        + spec.option("flavor")
-                            .map(f -> " for flavor '" + f + "'")
-                            .or(() -> spec.option("interface").map(i -> " for interface " + i))
-                            .orElse("")
-                        + (releases.isEmpty()
-                            ? "; none found at all, check tag_prefix and asset"
-                            : "")));
-
     boolean present =
         locked.isPresent()
             && locked.orElseThrow().folders().stream()
                 .allMatch(f -> Files.isDirectory(addonsDir.resolve(f)));
+    var picked = ReleaseSelector.preferLocked(backend, spec, releases, lockedTag);
+    if (picked.isEmpty()
+        && present
+        && !releases.isEmpty()
+        && ReleaseSelector.gameOf(spec).isPresent()) {
+      // Releases exist, just none for this game any more (it moved to a new expansion the addon
+      // hasn't caught up with): keep what is installed rather than fail.
+      var kept = locked.orElseThrow();
+      log.accept(
+          "no release of "
+              + spec.name()
+              + " is for "
+              + ReleaseSelector.gameOf(spec).orElseThrow()
+              + "; keeping "
+              + kept.version());
+      return new Outcome(
+          spec.name(),
+          Status.UP_TO_DATE,
+          Optional.of(kept.version()),
+          kept.version(),
+          kept.folders());
+    }
+    var release =
+        picked.orElseThrow(() ->
+            new InstallException(
+                ReleaseSelector.noReleaseMessage(spec)
+                    + (releases.isEmpty()
+                        ? "; none found at all, check tag_prefix and asset"
+                        : "")));
+
     if (!force && present && locked.orElseThrow().tag().equals(release.tag())) {
       log.accept(spec.name() + " " + release.version() + " is up to date");
       return new Outcome(

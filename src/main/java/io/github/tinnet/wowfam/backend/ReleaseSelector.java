@@ -43,4 +43,26 @@ public final class ReleaseSelector {
     }
     return Optional.empty();
   }
+
+  /**
+   * The game the addon is installed for, if it says: {@code flavor 'classic'}, {@code interface
+   * 16001}.
+   */
+  public static Optional<String> gameOf(AddonSpec spec) {
+    return spec.option("flavor")
+        .map(f -> "flavor '" + f + "'")
+        .or(() -> spec.option("interface").map(i -> "interface " + i));
+  }
+
+  /** Why nothing was picked for the addon, for an error message. */
+  public static String noReleaseMessage(AddonSpec spec) {
+    return "no release of "
+        + spec.name()
+        + " ("
+        + spec.source()
+        + ") matches version '"
+        + spec.version()
+        + "'"
+        + gameOf(spec).map(g -> " for " + g).orElse("");
+  }
 }
