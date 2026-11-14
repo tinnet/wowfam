@@ -84,8 +84,8 @@ moves. After adding or changing a `uses:`, run
 [`gh actions-lock`](https://github.com/github/gh-actions-lock) (`gh extension install
 github/gh-actions-lock`) and commit the lockfile with the workflow; CI's `actions-lock` job fails
 otherwise. Dependabot bumps actions weekly, a week after their release, and updates the lockfile
-in the same pull request. `gradle/actions` stays on v5: v6 puts its caching under Gradle's
-proprietary terms of use.
+in the same pull request. `setup-gradle` uses `cache-provider: basic`, its MIT-licensed cache;
+the default one is proprietary.
 
 ## Releases
 

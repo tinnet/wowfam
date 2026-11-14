@@ -10,7 +10,3 @@ updates:
     groups:
       actions:
         patterns: ["*"]
-    ignore:
-      # v6 moved its caching into a proprietary component under Gradle's terms of use.
-      - dependency-name: gradle/actions
-        versions: [">= 6"]
