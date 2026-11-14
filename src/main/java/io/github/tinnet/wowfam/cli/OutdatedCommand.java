@@ -24,7 +24,7 @@ final class OutdatedCommand implements Callable<Integer> {
   public Integer call() {
     var config = root.loadConfig();
     var lock = LockFile.read(config.lockFile());
-    var backends = root.backends();
+    var backends = root.backends(config);
     var table = new Table("ADDON", "INSTALLED", "LATEST");
     int outdated = 0;
     for (var addon : config.addons().values()) {

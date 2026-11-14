@@ -14,6 +14,7 @@ import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -79,6 +80,14 @@ public final class FakeGitHub implements AutoCloseable {
   public Backends backends() {
     return new Backends(
         List.of(new GitHubBackend(new GitHubApi(Http.client(Map.of()), base(), Optional.empty()))));
+  }
+
+  /** Backends that keep {@code release.json} files in {@code cacheDir}, as the CLI's do. */
+  public Backends backends(Path cacheDir) {
+    return new Backends(
+        List.of(
+            new GitHubBackend(
+                new GitHubApi(Http.client(Map.of()), base(), Optional.empty()), cacheDir)));
   }
 
   /** A zip whose entries are {@code path -> content}; paths ending in {@code /} are folders. */

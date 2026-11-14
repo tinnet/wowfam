@@ -34,7 +34,8 @@ Register a new backend in `WowfamCommand.defaultBackends`.
 resolves to nothing (no zip for this game) is passed over for the next newest.
 
 The GitHub backend keeps the release list of each repository for the run, so several addons from
-one repository cost one listing. An `asset` glob that matches several zips only fails for the
+one repository cost one listing. A `release.json` is kept in the cache directory under the digest
+GitHub publishes for it, so each one is downloaded once, not on every run. An `asset` glob that matches several zips only fails for the
 release that gets picked, so an old release that shipped two zips doesn't block newer ones.
 
 ## Installing

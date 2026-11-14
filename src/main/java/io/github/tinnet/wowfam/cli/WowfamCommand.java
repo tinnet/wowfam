@@ -14,7 +14,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Supplier;
+import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -53,19 +53,22 @@ public final class WowfamCommand implements Runnable {
   @CommandLine.Spec CommandLine.Model.CommandSpec spec;
 
   private final Map<String, String> env;
-  private final Supplier<Backends> backends;
 
-  public WowfamCommand(Map<String, String> env, Supplier<Backends> backends) {
+  /** The backends, given the cache directory of the config they serve. */
+  private final Function<Path, Backends> backends;
+
+  public WowfamCommand(Map<String, String> env, Function<Path, Backends> backends) {
     this.env = env;
     this.backends = backends;
   }
 
   public static CommandLine newCommandLine() {
     var env = System.getenv();
-    return newCommandLine(env, () -> defaultBackends(env));
+    return newCommandLine(env, cacheDir -> defaultBackends(env, cacheDir));
   }
 
-  public static CommandLine newCommandLine(Map<String, String> env, Supplier<Backends> backends) {
+  public static CommandLine newCommandLine(
+      Map<String, String> env, Function<Path, Backends> backends) {
     var cl = new CommandLine(new WowfamCommand(env, backends));
     cl.setExecutionExceptionHandler((ex, commandLine, parseResult) -> {
       if (ex instanceof ConfigException
@@ -81,7 +84,7 @@ public final class WowfamCommand implements Runnable {
     return cl;
   }
 
-  static Backends defaultBackends(Map<String, String> env) {
+  static Backends defaultBackends(Map<String, String> env, Path cacheDir) {
     var token =
         Optional.ofNullable(env.get("GITHUB_TOKEN"))
             .or(() -> Optional.ofNullable(env.get("GH_TOKEN")));
@@ -89,7 +92,8 @@ public final class WowfamCommand implements Runnable {
         Optional.ofNullable(env.get("WOWFAM_GITHUB_API"))
             .map(URI::create)
             .orElse(GitHubApi.DEFAULT_BASE);
-    return new Backends(List.of(new GitHubBackend(new GitHubApi(Http.client(env), base, token))));
+    return new Backends(
+        List.of(new GitHubBackend(new GitHubApi(Http.client(env), base, token), cacheDir)));
   }
 
   @Override
@@ -102,8 +106,8 @@ public final class WowfamCommand implements Runnable {
     return new ConfigLoader(env, Path.of(System.getProperty("user.home"))).load(file, addonsDir);
   }
 
-  Backends backends() {
-    return backends.get();
+  Backends backends(Config config) {
+    return backends.apply(config.settings().cacheDir());
   }
 
   static final class VersionProvider implements CommandLine.IVersionProvider {

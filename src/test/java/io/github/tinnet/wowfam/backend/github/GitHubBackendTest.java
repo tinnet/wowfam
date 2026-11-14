@@ -17,12 +17,14 @@ import io.github.tinnet.wowfam.backend.ReleaseSelector;
 import io.github.tinnet.wowfam.config.AddonSpec;
 import io.github.tinnet.wowfam.config.Source;
 import io.github.tinnet.wowfam.util.Version;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.json.JsonMapper;
 
 final class GitHubBackendTest {
@@ -121,6 +123,32 @@ final class GitHubBackendTest {
       // Closer is better: the rank is the zip's major and minor version.
       assertThat(rank).isEqualTo(built / 100);
     }
+  }
+
+  @Test
+  void releaseJsonIsDownloadedOncePerRelease(@TempDir Path cache) {
+    github.release(
+        "o/addon",
+        "v2.0.0",
+        zip("Addon-v2.0.0.zip"),
+        releaseJson(Map.of("Addon-v2.0.0.zip", List.of("classic"))));
+    var spec =
+        new AddonSpec(
+            "a", Source.parse("github:o/addon"), "latest", List.of(), Map.of("interface", "11508"));
+
+    // Each run (a new backend) reads it from the cache after the first.
+    for (int run = 0; run < 3; run++) {
+      var backend = github.backends(cache).get("github");
+      assertThat(ReleaseSelector.newest(backend, spec, backend.releases(spec)))
+          .hasValueSatisfying(r -> assertThat(r.asset().name()).isEqualTo("Addon-v2.0.0.zip"));
+    }
+    assertThat(releaseJsonDownloads()).isEqualTo(1);
+
+    // Without a cache directory, once per run.
+    var backend = github.backends().get("github");
+    ReleaseSelector.newest(backend, spec, backend.releases(spec));
+    ReleaseSelector.newest(backend, spec, backend.releases(spec));
+    assertThat(releaseJsonDownloads()).isEqualTo(2);
   }
 
   @Test

@@ -139,7 +139,7 @@ final class AddCommand implements Callable<Integer> {
     var game = config.settings().game().filter(g -> flavor == null);
     game.ifPresent(g -> options.put("interface", Integer.toString(g.interfaceNumber())));
 
-    var backends = root.backends();
+    var backends = root.backends(config);
     var backend = backends.get(src.backend());
     var addon = backend.discover(new AddonSpec(addonName, src, version, List.of(), options));
     for (var existing : config.addons().values()) {

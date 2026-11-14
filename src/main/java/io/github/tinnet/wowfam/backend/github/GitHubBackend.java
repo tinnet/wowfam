@@ -1,5 +1,6 @@
 package io.github.tinnet.wowfam.backend.github;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Comparator.comparing;
 import static java.util.stream.Collectors.joining;
 
@@ -12,9 +13,16 @@ import io.github.tinnet.wowfam.config.ConfigException;
 import io.github.tinnet.wowfam.util.Checksum;
 import io.github.tinnet.wowfam.util.Glob;
 import io.github.tinnet.wowfam.util.Version;
+import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -81,8 +89,24 @@ public final class GitHubBackend implements Backend {
    */
   private final Map<String, List<GitHubApi.GitHubRelease>> listed = new HashMap<>();
 
+  /** Where {@code release.json} files are kept by digest, if anywhere. */
+  private final Optional<Path> manifestCache;
+
+  /** {@code release.json} bodies read this run, by URL. */
+  private final Map<URI, String> manifests = new HashMap<>();
+
   public GitHubBackend(GitHubApi api) {
     this.api = api;
+    this.manifestCache = Optional.empty();
+  }
+
+  /**
+   * @param cacheDir wowfam's cache directory: a release's {@code release.json} is downloaded once
+   *     and read from there afterwards
+   */
+  public GitHubBackend(GitHubApi api, Path cacheDir) {
+    this.api = api;
+    this.manifestCache = Optional.of(cacheDir.resolve(RELEASE_JSON));
   }
 
   @Override
@@ -348,7 +372,7 @@ public final class GitHubBackend implements Backend {
 
     JsonNode manifest;
     try {
-      manifest = JSON.readTree(api.text(release.asset().url()));
+      manifest = JSON.readTree(manifestText(release.asset()));
     } catch (JacksonException e) {
       throw new BackendException(
           "addons."
@@ -457,6 +481,61 @@ public final class GitHubBackend implements Backend {
   static String canonicalFlavor(String flavor) {
     var lower = flavor.strip().toLowerCase(Locale.ROOT);
     return FLAVOR_ALIASES.getOrDefault(lower, lower);
+  }
+
+  /**
+   * The body of a {@code release.json}. One whose digest GitHub publishes never changes under that
+   * digest, so it is kept in the cache by digest; every install, update and outdated would
+   * otherwise download it again for each addon.
+   */
+  private String manifestText(Asset asset) {
+    var known = manifests.get(asset.url());
+    if (known != null) {
+      return known;
+    }
+    var cached =
+        asset
+            .checksum()
+            .filter(c -> c.algorithm().equals(Checksum.SHA256))
+            .flatMap(c -> manifestCache.map(dir -> dir.resolve(c.value() + ".json")));
+    String text = null;
+    if (cached.isPresent() && Files.isRegularFile(cached.orElseThrow())) {
+      try {
+        text = Files.readString(cached.orElseThrow());
+      } catch (IOException e) {
+        // Unreadable cache: fall through and download it again.
+      }
+    }
+    if (text == null) {
+      text = api.text(asset.url());
+      var body = text;
+      // Only what matches the digest is kept, so the cache can't hold a corrupt copy.
+      cached
+          .filter(file -> asset.checksum().orElseThrow().value().equals(sha256Hex(body)))
+          .ifPresent(file -> store(file, body));
+    }
+    manifests.put(asset.url(), text);
+    return text;
+  }
+
+  private static void store(Path file, String text) {
+    try {
+      Files.createDirectories(file.getParent());
+      var temp = file.resolveSibling(file.getFileName() + ".tmp");
+      Files.writeString(temp, text);
+      Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+    } catch (IOException e) {
+      // A cache that can't be written only costs a download next time.
+    }
+  }
+
+  private static String sha256Hex(String text) {
+    try {
+      return HexFormat.of()
+          .formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(UTF_8)));
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException(e);
+    }
   }
 
   private List<GitHubApi.GitHubRelease> listed(String repo) {
