@@ -146,9 +146,11 @@ final class AddCommand implements Callable<Integer> {
       if (existing.source().sameAs(addon.source())
           && existing.option("tag_prefix").equals(addon.option("tag_prefix"))
           && existing.option("flavor").equals(addon.option("flavor"))
-          // Without an asset the existing entry takes any zip; with one, a different asset is a
-          // different addon from the same releases (Polestar and Polestar_Recorder).
+          // Without an asset an entry takes any zip (or release.json's for the game); with one
+          // each, a different asset is a different addon from the same releases (Polestar and
+          // Polestar_Recorder).
           && (existing.option("asset").isEmpty()
+              || addon.option("asset").isEmpty()
               || existing.option("asset").equals(addon.option("asset")))) {
         throw new ConfigException(
             src + " is already in " + config.file() + " as addons." + existing.name());

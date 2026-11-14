@@ -525,5 +525,12 @@ final class CliTest {
 
     assertThat(run("list")).isEqualTo(0);
     assertThat(out.toString()).startsWith("game: wowf 1.60.1.70938 (interface 16001)");
+
+    // An entry written by hand with an asset is the same addon.
+    Files.writeString(
+        config,
+        Files.readString(config).replace("[addons.bars]", "[addons.old]\nasset = \"Bars-*.zip\""));
+    assertThat(run("add", "someone/bars", "--name", "again", "-n")).isEqualTo(1);
+    assertThat(err.toString()).contains("is already in", "as addons.old");
   }
 }
