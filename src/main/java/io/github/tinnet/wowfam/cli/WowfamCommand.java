@@ -9,6 +9,7 @@ import io.github.tinnet.wowfam.config.Config;
 import io.github.tinnet.wowfam.config.ConfigException;
 import io.github.tinnet.wowfam.config.ConfigLoader;
 import io.github.tinnet.wowfam.install.InstallException;
+import io.github.tinnet.wowfam.lock.LockFileException;
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.List;
@@ -73,7 +74,8 @@ public final class WowfamCommand implements Runnable {
     cl.setExecutionExceptionHandler((ex, commandLine, parseResult) -> {
       if (ex instanceof ConfigException
           || ex instanceof BackendException
-          || ex instanceof InstallException) {
+          || ex instanceof InstallException
+          || ex instanceof LockFileException) {
         commandLine
             .getErr()
             .println(commandLine.getColorScheme().errorText("error: " + ex.getMessage()));

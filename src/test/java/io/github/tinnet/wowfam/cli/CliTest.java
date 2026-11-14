@@ -497,6 +497,21 @@ final class CliTest {
   }
 
   @Test
+  void everydayFailuresAreMessagesNotStackTraces() throws Exception {
+    // A hand-edited lock with a typo.
+    Files.writeString(tmp.resolve("wowfam.lock"), "[addons.spoken\n");
+    assertThat(run("install")).isEqualTo(1);
+    assertThat(err.toString()).startsWith("error: invalid lock file").doesNotContain("\tat ");
+    Files.delete(tmp.resolve("wowfam.lock"));
+
+    // Something other than GitHub answering, e.g. a captive portal.
+    assertThat(run("add", FakeGitHub.CAPTIVE_PORTAL, "-n")).isEqualTo(1);
+    assertThat(err.toString())
+        .startsWith("error: listing releases of captive/portal got something other than")
+        .doesNotContain("\tat ");
+  }
+
+  @Test
   void addNamesTheEntryAfterTheRepository() {
     assertThat(AddCommand.defaultName(Source.parse("github:mooreatv/BetterVendorPrice")))
         .isEqualTo("better-vendor-price");

@@ -176,7 +176,14 @@ public final class FakeGitHub implements AutoCloseable {
     }
   }
 
+  /** Repository whose release list answers 200 with HTML, as a captive portal would. */
+  public static final String CAPTIVE_PORTAL = "captive/portal";
+
   private void list(HttpExchange exchange, String repo) throws IOException {
+    if (repo.equals(CAPTIVE_PORTAL)) {
+      send(exchange, 200, "<html><body>Please log in to the hotel Wi-Fi</body></html>");
+      return;
+    }
     var mine = releases.stream().filter(r -> r.repo().equals(repo)).toList();
     if (mine.isEmpty()) {
       send(exchange, 404, "{\"message\":\"Not Found\"}");

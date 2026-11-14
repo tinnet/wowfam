@@ -48,7 +48,7 @@ public final class LockFile {
       }
       return lock;
     } catch (IOException e) {
-      throw new IllegalStateException("cannot read " + path + ": " + e.getMessage(), e);
+      throw new LockFileException("cannot read " + path + ": " + e.getMessage(), e);
     }
   }
 
@@ -57,8 +57,7 @@ public final class LockFile {
     try {
       root = TOML.readTree(toml);
     } catch (JacksonException e) {
-      throw new IllegalStateException(
-          "invalid lock file " + path + ": " + e.getOriginalMessage(), e);
+      throw new LockFileException("invalid lock file " + path + ": " + e.getOriginalMessage(), e);
     }
     var entries = new TreeMap<String, LockEntry>();
     boolean outdatedFormat = false;
@@ -73,7 +72,7 @@ public final class LockFile {
             Optional.of(
                 Checksum.parse(text)
                     .orElseThrow(() ->
-                        new IllegalStateException(
+                        new LockFileException(
                             "invalid lock file "
                                 + path
                                 + ": checksum of "
@@ -183,7 +182,7 @@ public final class LockFile {
       Files.writeString(tmp, toToml());
       Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     } catch (IOException e) {
-      throw new IllegalStateException("cannot write " + path + ": " + e.getMessage(), e);
+      throw new LockFileException("cannot write " + path + ": " + e.getMessage(), e);
     }
   }
 }

@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -54,7 +55,21 @@ public final class GitHubApi {
               get(next).header("Accept", "application/vnd.github+json").build(),
               HttpResponse.BodyHandlers.ofString());
       check(response, "list releases of " + repo);
-      for (var node : JSON.readTree(response.body())) {
+      JsonNode listing;
+      try {
+        listing = JSON.readTree(response.body());
+      } catch (JacksonException e) {
+        listing = null;
+      }
+      if (listing == null || !listing.isArray()) {
+        // A proxy or captive portal answering in place of GitHub, typically with HTML.
+        throw new BackendException(
+            "listing releases of "
+                + repo
+                + " got something other than GitHub's answer from "
+                + next);
+      }
+      for (var node : listing) {
         result.add(release(node));
       }
       next = response.headers().firstValue("Link").map(GitHubApi::nextLink).orElse(null);

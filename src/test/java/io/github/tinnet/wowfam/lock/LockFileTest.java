@@ -159,7 +159,7 @@ final class LockFileTest {
                 source = "github:o/r"
                 checksum = "abcdef"
                 """))
-        .isInstanceOf(IllegalStateException.class)
+        .isInstanceOf(LockFileException.class)
         .hasMessageContaining("checksum of a is not <algorithm>:<hex>");
   }
 

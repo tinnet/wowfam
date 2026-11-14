@@ -13,7 +13,6 @@ import io.github.tinnet.wowfam.lock.LockFile;
 import io.github.tinnet.wowfam.util.Checksum;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -380,7 +379,7 @@ public final class Installer {
       }
       return new Checksum(algorithm, HexFormat.of().formatHex(digest.digest()));
     } catch (IOException e) {
-      throw new UncheckedIOException(e);
+      throw new InstallException("cannot read " + file + ": " + e.getMessage(), e);
     } catch (NoSuchAlgorithmException e) {
       throw new IllegalStateException(e);
     }
