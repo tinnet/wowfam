@@ -119,10 +119,11 @@ public final class Installer {
     var picked = ReleaseSelector.preferLocked(backend, spec, releases, lockedTag);
     if (picked.isEmpty()
         && present
-        && !releases.isEmpty()
-        && ReleaseSelector.gameOf(spec).isPresent()) {
-      // Releases exist, just none for this game any more (it moved to a new expansion the addon
-      // hasn't caught up with): keep what is installed rather than fail.
+        && ReleaseSelector.gameOf(spec).isPresent()
+        && releases.stream().anyMatch(r -> r.version().satisfies(spec.version()))) {
+      // Releases of the wanted version exist, just none for this game any more (it moved to a new
+      // expansion the addon hasn't caught up with): keep what is installed rather than fail. A
+      // version nothing satisfies is the user's mistake and stays an error.
       var kept = locked.orElseThrow();
       log.accept(
           "no release of "

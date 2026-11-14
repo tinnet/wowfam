@@ -299,6 +299,13 @@ final class CliTest {
     assertThat(out.toString()).contains("no release of bars is for interface 50503; keeping 1.0.0");
     assertThat(addons.resolve("Bars/Bars.toc")).content().contains("## Version: 1.0.0");
 
+    // A version no release has is a mistake in wowfam.toml, not the game's doing.
+    var keeping = Files.readString(config);
+    Files.writeString(config, keeping.replace("interface", "version = \"9\"\ninterface"));
+    assertThat(run("update")).isEqualTo(1);
+    assertThat(err.toString()).contains("matches version '9'");
+    Files.writeString(config, keeping);
+
     // Not installed, there is nothing to keep: that is still an error.
     Files.writeString(config, Files.readString(config).replace("[addons.bars]", "[addons.bars2]"));
     assertThat(run("install", "bars2")).isEqualTo(1);
