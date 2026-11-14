@@ -240,6 +240,15 @@ final class CliTest {
           assertThat(e.checksum()).isPresent();
         });
 
+    // Another flavor is another zip of the same release: install swaps it in.
+    var classic = Files.readString(config);
+    Files.writeString(config, classic.replace("classic_era", "retail"));
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+    assertThat(addons.resolve("Bars/Bars.toc")).content().contains("## Version: 1.0.0-retail");
+    Files.writeString(config, classic);
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+    assertThat(addons.resolve("Bars/Bars.toc")).content().contains("## Version: 1.0.0-classic");
+
     // 2.0.0 dropped Classic: nothing to update to, and nothing reported as outdated.
     github.release(
         "someone/bars",

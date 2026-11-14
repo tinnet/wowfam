@@ -1,5 +1,6 @@
 package io.github.tinnet.wowfam.install;
 
+import io.github.tinnet.wowfam.backend.Asset;
 import io.github.tinnet.wowfam.backend.BackendException;
 import io.github.tinnet.wowfam.backend.Backends;
 import io.github.tinnet.wowfam.backend.Release;
@@ -147,7 +148,15 @@ public final class Installer {
                         ? "; none found at all, check tag_prefix and asset"
                         : "")));
 
-    if (!force && present && locked.orElseThrow().tag().equals(release.tag())) {
+    // The same release is only up to date with the same zip: a changed asset, flavor or nolib
+    // picks another zip of it.
+    if (!force
+        && present
+        && locked.orElseThrow().tag().equals(release.tag())
+        && release.assets().stream()
+            .map(Asset::name)
+            .toList()
+            .equals(List.of(locked.orElseThrow().asset()))) {
       log.accept(spec.name() + " " + release.version() + " is up to date");
       return new Outcome(
           spec.name(),
