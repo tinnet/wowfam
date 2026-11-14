@@ -51,7 +51,8 @@ final class GameTest {
   @Test
   void readsTheLaunchersTables() throws Exception {
     var file = tmp.resolve("t");
-    Files.writeString(file, "﻿A!STRING:0|B!DEC:1\r\n## seqn = 1\r\nx|1\r\ny\r\n\r\n");
+    // Saved with a byte-order mark, comments and Windows line ends.
+    Files.writeString(file, "\uFEFFA!STRING:0|B!DEC:1\r\n## seqn = 1\r\nx|1\r\ny\r\n\r\n");
     assertThat(Game.readTable(file)).containsExactly(Map.of("A", "x", "B", "1"), Map.of("A", "y"));
     assertThat(Game.readTable(tmp.resolve("missing"))).isEmpty();
     assertThat(Game.interfaceOf("3.80.2.1")).hasValue(38002);

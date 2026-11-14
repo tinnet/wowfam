@@ -97,7 +97,7 @@ public record Game(String product, String version, int interfaceNumber) {
     var rows = new ArrayList<Map<String, String>>();
     List<String> header = null;
     for (var raw : lines) {
-      var line = raw.replace("﻿", "").strip();
+      var line = raw.replace("\uFEFF", "").strip();
       if (line.isEmpty() || line.startsWith("#")) {
         continue;
       }
