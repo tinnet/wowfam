@@ -51,7 +51,7 @@ public final class WowfamCommand implements Runnable {
       scope = ScopeType.INHERIT,
       description =
           "Path to wowfam.toml (default: $WOWFAM_CONFIG, else wowfam/wowfam.toml in the user's"
-              + " config folder: $XDG_CONFIG_HOME or ~/.config, %APPDATA% on Windows).",
+              + " config folder: $XDG_CONFIG_HOME or ~/.config, %%APPDATA%% on Windows).",
       paramLabel = "FILE")
   @Nullable Path config;
 

@@ -1,6 +1,7 @@
 package io.github.tinnet.wowfam.cli;
 
 import static io.github.tinnet.wowfam.FakeGitHub.addonZip;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.tinnet.wowfam.FakeGitHub;
@@ -10,11 +11,14 @@ import io.github.tinnet.wowfam.config.Registry;
 import io.github.tinnet.wowfam.config.Source;
 import io.github.tinnet.wowfam.lock.LockFile;
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
+import picocli.CommandLine;
 
 /** End to end through the CLI, against a fake GitHub laid out like rusty-key/spoken-wow. */
 final class CliTest {
@@ -555,6 +560,30 @@ final class CliTest {
         .contains("'questy' is not a well-known addon; did you mean questie?")
         .doesNotContain("\tat ");
     assertThat(github.requests()).hasSize(requests);
+  }
+
+  /**
+   * picocli formats help texts with String.format, so a bare % (as in %APPDATA%) makes it print
+   * warnings, to System.err, with every --help.
+   */
+  @Test
+  void helpPrintsNoPicocliWarnings() {
+    var commands = new ArrayDeque<CommandLine>();
+    commands.addLast(
+        WowfamCommand.newCommandLine(Map.of(), "Linux", github::backends, Optional.empty()));
+    var stderr = new ByteArrayOutputStream();
+    var original = System.err;
+    System.setErr(new PrintStream(stderr, true, UTF_8));
+    try {
+      while (!commands.isEmpty()) {
+        var cl = commands.removeFirst();
+        commands.addAll(cl.getSubcommands().values());
+        assertThat(cl.getUsageMessage()).isNotBlank();
+      }
+    } finally {
+      System.setErr(original);
+    }
+    assertThat(stderr.toString(UTF_8)).doesNotContain("picocli WARN");
   }
 
   @Test
