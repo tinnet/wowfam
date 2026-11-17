@@ -45,6 +45,25 @@ final class TocFileTest {
   }
 
   @Test
+  void readAllKeepsOnlyTheDependencyKeysOfATocFullOfData(@TempDir Path tmp) throws Exception {
+    // How QuestieDB stores its database: tens of thousands of ## keys in the .toc.
+    var dir = Files.createDirectory(tmp.resolve("QuestieDB"));
+    var toc = new StringBuilder("## Interface: 11508\n## Title: QuestieDB\n");
+    for (int i = 0; i < 50_000; i++) {
+      toc.append("## X-Quest-").append(i).append(": {1,2,3}\n");
+    }
+    toc.append("## RequiredDeps: Questie\nQuestieDB.lua\n");
+    Files.writeString(dir.resolve("QuestieDB_Vanilla.toc"), toc);
+
+    assertThat(TocFile.readAll(dir))
+        .singleElement()
+        .satisfies(t -> {
+          assertThat(t.metadata()).containsOnlyKeys("RequiredDeps");
+          assertThat(t.requiredDependencies()).containsExactly("Questie");
+        });
+  }
+
+  @Test
   void readsLatin1AndByteOrderMarks(@TempDir Path tmp) throws Exception {
     var dir = Files.createDirectory(tmp.resolve("Old"));
     // Latin-1, which isn't valid UTF-8, starting with a UTF-8 byte-order mark.
