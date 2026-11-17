@@ -612,7 +612,8 @@ final class CliTest {
                   .startsWith("spoken ")
                   .contains("github:rusty-key/spoken-wow")
                   .endsWith("tag_prefix=spoken/ asset=Spoken-*.zip"))
-          .anySatisfy(l -> assertThat(l).startsWith("weakauras ").endsWith("WeakAuras2"));
+          .anySatisfy(
+              l -> assertThat(l).startsWith("whatstraining ").endsWith("fusionpit/WhatsTraining"));
     }
   }
 

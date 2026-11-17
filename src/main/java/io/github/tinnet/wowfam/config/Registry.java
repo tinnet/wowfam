@@ -14,8 +14,10 @@ import java.util.Optional;
  * work out. {@code add} writes the resolved source and options to {@code wowfam.toml}, never the
  * registry name, so a later change here never moves an existing setup to another repository.
  *
- * <p>Keep entries in alphabetical order. Options are only needed where the repository publishes
- * several things or discovery could pick wrong; the rest {@code add} works out as for any source.
+ * <p>For now the list only holds addons known to work on WoW: Forever (interface 16001): check its
+ * release.json or .toc before adding one. Keep entries in alphabetical order. Options are only
+ * needed where the repository publishes several things or discovery could pick wrong; the rest
+ * {@code add} works out as for any source.
  */
 public final class Registry {
 
@@ -37,6 +39,7 @@ public final class Registry {
           entry("better-vendor-price", "github:mooreatv/BetterVendorPrice", Map.of()),
           entry("bigwigs", "github:BigWigsMods/BigWigs", Map.of()),
           entry("dbm", "github:DeadlyBossMods/DeadlyBossMods", Map.of()),
+          entry("foreverplusplus", "github:xIGBClutchIx/ForeverPlusPlus", Map.of()),
           entry("polestar", "github:fitzforge/polestar", Map.of("asset", "Polestar-*.zip")),
           entry(
               "polestar-recorder",
@@ -55,7 +58,7 @@ public final class Registry {
               "spoken-readables-audio",
               "github:rusty-key/spoken-wow",
               Map.of("tag_prefix", "readables-audio/", "asset", "SpokenReadablesAudio-*.zip")),
-          entry("weakauras", "github:WeakAuras/WeakAuras2", Map.of()));
+          entry("whatstraining", "github:fusionpit/WhatsTraining", Map.of()));
 
   private Registry() {}
 

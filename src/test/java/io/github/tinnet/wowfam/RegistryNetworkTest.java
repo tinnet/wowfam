@@ -3,7 +3,6 @@ package io.github.tinnet.wowfam;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.tinnet.wowfam.backend.Asset;
-import io.github.tinnet.wowfam.backend.BackendException;
 import io.github.tinnet.wowfam.backend.Http;
 import io.github.tinnet.wowfam.backend.ReleaseSelector;
 import io.github.tinnet.wowfam.backend.github.GitHubApi;
@@ -21,14 +20,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * Every well-known addon still resolves to one zip on the real GitHub, the way {@code add} would
- * pick it: for a game (which takes the zip from a release.json, where there is one), and for an
- * AddOns folder whose game is unknown. Run with {@code gradle networkTest}.
+ * pick it: for Forever, which the list is for (taking the zip from a release.json, where there is
+ * one), and for an AddOns folder whose game is unknown. Run with {@code gradle networkTest}.
  */
 @Tag("network")
 final class RegistryNetworkTest {
-
-  /** Games to try; an addon need only support one of them (Questie is Classic only). */
-  private static final List<String> FLAVORS = List.of("mainline", "classic", "forever");
 
   private static final GitHubBackend BACKEND =
       new GitHubBackend(
@@ -43,22 +39,10 @@ final class RegistryNetworkTest {
 
   @MethodSource("entries")
   @ParameterizedTest
-  void resolvesForAGame(Registry.Entry entry) {
-    var games =
-        FLAVORS.stream()
-            .filter(flavor -> {
-              var options = new HashMap<>(entry.options());
-              options.put("flavor", flavor);
-              // A game the addon doesn't support may also fail on an old release (WeakAuras has
-              // no mainline zips since 12.0); only one game has to work.
-              try {
-                return resolve(entry, options).isPresent();
-              } catch (BackendException e) {
-                return false;
-              }
-            })
-            .toList();
-    assertThat(games).as("games %s resolves for", entry.name()).isNotEmpty();
+  void resolvesForForever(Registry.Entry entry) {
+    var options = new HashMap<>(entry.options());
+    options.put("flavor", "forever");
+    assertThat(resolve(entry, options)).as(entry.name()).isPresent();
   }
 
   @MethodSource("entries")

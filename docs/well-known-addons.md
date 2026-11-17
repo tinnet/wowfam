@@ -24,8 +24,8 @@ asset = "Spoken-*.zip"
 The entry is named after the addon (`spoken`, not `spoken-wow`); `--name` changes that. Giving
 `--tag-prefix` or `--asset` yourself replaces all of the list's options, since together they pick
 one thing out of the repository; to install something else from it, it is usually simpler to give
-`owner/repo`. Names ignore case. A name that isn't in the list is an error that suggests close ones; for any other
-addon give `owner/repo` or its GitHub URL.
+`owner/repo`. Names ignore case. A name that isn't in the list is an error that suggests close
+ones; for any other addon give `owner/repo` or its GitHub URL.
 
 `wowfam registry` (or `wowfam registry ls`) prints the list your wowfam knows; it needs no
 `wowfam.toml`. As of this writing:
@@ -35,19 +35,24 @@ addon give `owner/repo` or its GitHub URL.
 | `better-vendor-price`    | `github:mooreatv/BetterVendorPrice`    |                                                                           |
 | `bigwigs`                | `github:BigWigsMods/BigWigs`           |                                                                           |
 | `dbm`                    | `github:DeadlyBossMods/DeadlyBossMods` |                                                                           |
+| `foreverplusplus`        | `github:xIGBClutchIx/ForeverPlusPlus`  |                                                                           |
 | `polestar`               | `github:fitzforge/polestar`            | `asset = "Polestar-*.zip"`                                                |
 | `polestar-recorder`      | `github:fitzforge/polestar`            | `asset = "Polestar_Recorder-*.zip"`                                       |
 | `questie`                | `github:Questie/Questie`               | `tag_prefix = "bundle/"`                                                  |
 | `spoken`                 | `github:rusty-key/spoken-wow`          | `tag_prefix = "spoken/"`, `asset = "Spoken-*.zip"`                        |
 | `spoken-bosses-audio`    | `github:rusty-key/spoken-wow`          | `tag_prefix = "bosses-audio/"`, `asset = "SpokenBossesAudio-*.zip"`       |
 | `spoken-readables-audio` | `github:rusty-key/spoken-wow`          | `tag_prefix = "readables-audio/"`, `asset = "SpokenReadablesAudio-*.zip"` |
-| `weakauras`              | `github:WeakAuras/WeakAuras2`          |                                                                           |
+| `whatstraining`          | `github:fusionpit/WhatsTraining`       |                                                                           |
 
 ## Adding one to the list
 
+For now the list only holds addons known to work on WoW: Forever. Most of them work on other games
+too; `add` installs the right zip, or says when an addon has no release for your game.
+
 The list is `Registry.ENTRIES` in
 [`config/Registry.java`](../src/main/java/io/github/tinnet/wowfam/config/Registry.java), kept in
-alphabetical order. An addon belongs there if it publishes its zips as GitHub releases.
+alphabetical order. An addon belongs there if it publishes its zips as GitHub releases and works
+on Forever: its `release.json` lists the `forever` flavor, or its `.toc` has `## Interface: 16001`.
 
 - The name is lower case, letters, digits and `-`: what players call the addon, not the
   repository.
