@@ -35,6 +35,11 @@ protect_breaking_commits = true
 filter_commits = false
 tag_pattern = "v20[0-9.]*"
 sort_commits = "oldest"
+# GitHub's merge commits aren't conventional, and git-cliff warns about them before any parser
+# runs. As chore commits they are skipped below; the commits they merge are listed on their own.
+commit_preprocessors = [
+  { pattern = "^Merge (pull request|branch) .*", replace = "chore: merge" },
+]
 # The <!-- n --> prefixes order the sections; striptags drops them in the output.
 commit_parsers = [
   { message = "^feat", group = "<!-- 0 -->Features" },
