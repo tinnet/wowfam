@@ -7,7 +7,7 @@ How wowfam works inside. The [README](../README.md) describes what it does for u
 
 | Package       | What                                                                                  |
 |---------------|---------------------------------------------------------------------------------------|
-| `cli`         | picocli commands (`init`, `add`, `remove`, `install`, `update`, `list`, `outdated`), output tables |
+| `cli`         | picocli commands (`init`, `add`, `remove`, `install`, `update`, `list`, `outdated`, `registry`), output tables |
 | `config`      | `wowfam.toml` model, loader and text editor; finding WoW installs; game detection; well-known addons |
 | `backend`     | the `Backend` interface, release selection, HTTP; `backend.github` is GitHub releases |
 | `install`     | download → verify → unpack → swap folders; zip-slip-safe extraction; `.toc` parsing; hooks |

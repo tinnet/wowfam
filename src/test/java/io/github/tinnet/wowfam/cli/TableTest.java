@@ -26,6 +26,19 @@ final class TableTest {
   }
 
   @Test
+  void anEmptyLastCellLeavesNoTrailingSpaces() {
+    var table = new Table("NAME", "OPTIONS").row("questie", "tag_prefix=bundle/").row("dbm", "");
+
+    assertThat(print(table))
+        .isEqualTo(
+            """
+            NAME     OPTIONS
+            questie  tag_prefix=bundle/
+            dbm
+            """);
+  }
+
+  @Test
   void rejectsRowsOfTheWrongLength() {
     assertThatThrownBy(() -> new Table("A", "B").row("only one"))
         .isInstanceOf(IllegalArgumentException.class);

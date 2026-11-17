@@ -6,12 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 final class RegistryTest {
-
-  private static final Set<String> OPTIONS = Set.of("tag_prefix", "asset", "prerelease");
 
   @Test
   void everyEntryIsSomethingAddCouldWrite() {
@@ -23,7 +20,7 @@ final class RegistryTest {
               .isEqualTo(e.name().toLowerCase(Locale.ROOT));
           assertThat(Registry.isName(e.name())).isTrue();
           assertThat(Source.parse(e.source().toString())).isEqualTo(e.source());
-          assertThat(e.options().keySet()).isSubsetOf(OPTIONS);
+          assertThat(e.options().keySet()).isSubsetOf(Registry.OPTIONS);
           // The table it becomes must parse like one written by hand.
           ConfigEditor.addonTable(
               "g", new AddonSpec(e.name(), e.source(), AddonSpec.LATEST, List.of(), e.options()));

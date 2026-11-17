@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.tinnet.wowfam.FakeGitHub;
 import io.github.tinnet.wowfam.WowInstall;
 import io.github.tinnet.wowfam.config.ConfigLoader;
+import io.github.tinnet.wowfam.config.Registry;
 import io.github.tinnet.wowfam.config.Source;
 import io.github.tinnet.wowfam.lock.LockFile;
 import java.io.BufferedReader;
@@ -554,6 +555,24 @@ final class CliTest {
         .contains("'questy' is not a well-known addon; did you mean questie?")
         .doesNotContain("\tat ");
     assertThat(github.requests()).hasSize(requests);
+  }
+
+  @Test
+  void registryListsTheWellKnownAddonsWithoutAConfig() throws Exception {
+    Files.delete(config);
+    for (var args : List.of(List.of("registry"), List.of("registry", "ls"))) {
+      assertThat(run(args.toArray(String[]::new))).as(err.toString()).isEqualTo(0);
+      var lines = out.toString().lines().toList();
+      assertThat(lines.getFirst()).startsWith("NAME").contains("SOURCE", "OPTIONS");
+      assertThat(lines)
+          .hasSize(Registry.all().size() + 1)
+          .anySatisfy(l ->
+              assertThat(l)
+                  .startsWith("spoken ")
+                  .contains("github:rusty-key/spoken-wow")
+                  .endsWith("tag_prefix=spoken/ asset=Spoken-*.zip"))
+          .anySatisfy(l -> assertThat(l).startsWith("weakauras ").endsWith("WeakAuras2"));
+    }
   }
 
   @Test

@@ -23,9 +23,15 @@ public final class Registry {
   /** What a bare word on the command line must look like to be a registry name. */
   private static final Pattern BARE = Pattern.compile("[A-Za-z0-9_-]+");
 
+  /** The options an entry may preset, in the order they are shown. */
+  public static final List<String> OPTIONS = List.of("tag_prefix", "asset", "prerelease");
+
   /** A well-known addon: its name in the registry and the entry {@code add} starts from. */
   public record Entry(String name, Source source, Map<String, String> options) {
     public Entry {
+      if (!OPTIONS.containsAll(options.keySet())) {
+        throw new IllegalArgumentException(name + ": options must be among " + OPTIONS);
+      }
       options = Map.copyOf(options);
     }
   }

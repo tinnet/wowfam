@@ -85,6 +85,7 @@ wowfam outdated           # what update would change
 wowfam update             # move everything to the newest matching release
 wowfam remove questie     # uninstall it and take it out of wowfam.toml
 wowfam list               # what is configured and what is installed
+wowfam registry           # the well-known addons add takes by name
 ```
 
 `install`, `update`, `outdated` and `list` work on every game; `-g GAME` limits them to one. `add`

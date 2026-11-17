@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * A plain-text table whose columns are as wide as their widest cell, two spaces apart. The last
- * column is not padded, so lines carry no trailing spaces.
+ * column is not padded and an empty one leaves no padding, so lines carry no trailing spaces.
  */
 final class Table {
 
@@ -38,7 +38,8 @@ final class Table {
       for (int i = 0; i < columns - 1; i++) {
         line.append(row.get(i)).repeat(' ', widths[i] - row.get(i).length() + 2);
       }
-      out.println(line.append(row.get(columns - 1)));
+      // An empty last cell would leave the padding before it.
+      out.println(line.append(row.get(columns - 1)).toString().stripTrailing());
     }
   }
 }

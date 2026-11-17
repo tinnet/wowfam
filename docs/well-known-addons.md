@@ -26,6 +26,9 @@ other option you give (`--asset`, `--tag-prefix`, `--version`, …) wins over th
 ignore case. A name that isn't in the list is an error that suggests close ones; for any other
 addon give `owner/repo` or its GitHub URL.
 
+`wowfam registry` (or `wowfam registry ls`) prints the list your wowfam knows; it needs no
+`wowfam.toml`. As of this writing:
+
 | Name                     | Source                                 | Options                                                                   |
 |--------------------------|----------------------------------------|---------------------------------------------------------------------------|
 | `better-vendor-price`    | `github:mooreatv/BetterVendorPrice`    |                                                                           |

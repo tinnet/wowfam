@@ -40,6 +40,7 @@ import picocli.CommandLine.ScopeType;
       InstallCommand.class,
       ListCommand.class,
       OutdatedCommand.class,
+      RegistryCommand.class,
       RemoveCommand.class,
       UpdateCommand.class
     })
