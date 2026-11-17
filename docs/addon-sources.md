@@ -25,7 +25,7 @@ flowchart LR
 |---|---|---|
 | [CurseForge](https://www.curseforge.com/wow) | Overwolf | The CurseForge API, only with an API key Overwolf approves; each author can also block third-party apps for a project |
 | [Wago Addons](https://addons.wago.io) | Method | The Wago API, through an agreement: WowUp has one, and it requires ads |
-| [WoWInterface](https://www.wowinterface.com) | MMOUI | Its API (`api.mmoui.com`), which WowUp calls |
+| [WoWInterface](https://www.wowinterface.com) | MMOUI | No public API; WowUp reads the undocumented one behind Minion (`api.mmoui.com`) |
 | GitHub releases | the author | GitHub's public REST API; anyone can read it |
 
 ## The apps
@@ -138,13 +138,46 @@ flowchart LR
   host -- monthly rewards,<br/>by downloads --> author[Addon author]
 ```
 
+### Who pays for the rest
+
+That loop leaves out two sources and one app.
+
+- **WoWInterface** is a small site: its admins bought the MMOUI network (WoWInterface, its sister
+  sites and Minion) back into their own company, Good Game Mods LLC, in 2016
+  ([announcement](https://www.wowinterface.com/forums/showpost.php?p=312607&postcount=1)). It has
+  lived on website ads and a premium membership that removed them
+  ([2007](https://wowinterface.com/forums/showthread.php?p=47089)); after 2016 a new premium plan
+  was "yet to be decided", and nothing newer on its income is public. Third-party apps cost it
+  bandwidth and bring nothing back. In 2020 its admin wrote that they were looking into an API for
+  them "that is affordable and doesn't bankrupt us with crippling resource expenses", most likely
+  by "requiring authentication for downloads… to enforce the server limitations of
+  non-subscribers… even through third-party managers"
+  ([quoted here](https://wowinterface.com/forums/showpost.php?p=337354&postcount=8)). No such API
+  has been announced. In 2022 he noted, matter-of-factly, that WowUp is "using our undocumented
+  minion api" ([thread](https://wowinterface.com/forums/showthread.php?p=340620)): tolerated, as
+  far as anything public says, not agreed.
+- **GitHub** hosts release files for anyone to download as a service it offers on purpose, and
+  authors choose to publish there. A download from a release costs nobody an ad view; the only
+  limit on tools is the API's rate limit.
+- **WowUp** says it is "free because players back it on Patreon"
+  ([wowup.io](https://wowup.io); about $262 a month from some 500 patrons in one
+  [snapshot](https://www.patreon.com/jliddev/about)). The ads in its editions are served by Wago
+  and by Overwolf. Overwolf apps generally get a share of their ad revenue, and the CurseForge
+  edition is one, but whether WowUp earns anything from either edition's ads is not public.
+
+So a WowUp user installing from WoWInterface costs WoWInterface bandwidth and pays it nothing,
+while the same app's ads pay CurseForge or Wago and their authors.
+
 ## What this means for wowfam
 
 wowfam is a command-line tool: it has nowhere to show an ad, and as open source it can't keep an
 API key secret. That rules out CurseForge, and Wago's terms as WowUp has them. GitHub releases need
 neither, the packager already publishes them for most addons, and its `release.json` says which zip
-is for which game. WoWInterface is the one other source whose API WowUp reads without ads; wowfam
-doesn't support it yet.
+is for which game, and downloading them uses GitHub the way it means to be used.
+
+WoWInterface is the one other source an ad-free tool could read, but only through the undocumented
+API behind Minion, run by a small team worried about exactly that cost. wowfam won't read it
+without asking WoWInterface first, and would take authentication if they want it.
 
 ## Sources
 
@@ -161,6 +194,11 @@ doesn't support it yet.
 - Overwolf:
   [The CurseForge official API is now live](https://medium.com/overwolf/the-curseforge-official-api-is-now-live-d314606355c2),
   [CurseForge support on the third-party toggle](https://support.curseforge.com/support/solutions/articles/9000207877)
+- WoWInterface:
+  [The future of MMOUI](https://www.wowinterface.com/forums/showpost.php?p=312607&postcount=1)
+  (2016), [on third-party managers](https://wowinterface.com/forums/showpost.php?p=337354&postcount=8)
+  (2020), [on WowUp's use of the Minion API](https://wowinterface.com/forums/showthread.php?p=340620)
+  (2022)
 - Wago: [Method's announcement of the WowUp partnership](https://mailcoach.method.gg/webview/7e52f06b-1a71-4307-aef1-712b3a16a378),
   [Wago Patreon](https://addons.wago.io/patreon)
 - Packaging: [BigWigs packager](https://github.com/BigWigsMods/packager),

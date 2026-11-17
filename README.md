@@ -305,8 +305,9 @@ Wago pays addon authors from ad revenue, so apps that install from it show Wago'
 unless you have a Wago access key. A command-line tool has nowhere to show them.
 
 **What about WoWInterface?**
-It has an API that WowUp reads, and it would be the natural next backend. wowfam doesn't support it
-yet.
+Not yet, and not without asking. It has no public API: WowUp reads the undocumented one behind
+WoWInterface's own Minion app, which costs a small site bandwidth and brings it nothing back. A
+wowfam backend would start with WoWInterface's permission, and with authentication if they want it.
 
 **My addon isn't on GitHub. What now?**
 Ask its author: if they use the BigWigs packager, a GitHub release is one setting away. Until then,
