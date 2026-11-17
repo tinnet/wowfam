@@ -97,6 +97,11 @@ final class CliTest {
     return addonZip("Spoken-" + version + ".zip", version, folders);
   }
 
+  private static FakeGitHub.FakeAsset bossesAudio(String version) {
+    return addonZip(
+        "SpokenBossesAudio-" + version + ".zip", version, Map.of("SpokenBossesAudio", ""));
+  }
+
   private int run(String... args) {
     var full = new String[args.length + 2];
     full[0] = "--config";
@@ -479,10 +484,7 @@ final class CliTest {
 
   @Test
   void addTakesTheUsersOptionsAndCanSkipTheInstall() throws Exception {
-    github.release(
-        REPO,
-        "bosses-audio/v2.1.0",
-        addonZip("SpokenBossesAudio-2.1.0.zip", "2.1.0", Map.of("SpokenBossesAudio", "")));
+    github.release(REPO, "bosses-audio/v2.1.0", bossesAudio("2.1.0"));
     assertThat(run("add", REPO, "--tag-prefix", "readables-audio/")).isEqualTo(1);
     assertThat(err.toString()).contains("already in", "as spoken-readables-audio");
 
@@ -510,10 +512,7 @@ final class CliTest {
 
   @Test
   void addTakesAWellKnownAddonByName() throws Exception {
-    github.release(
-        REPO,
-        "bosses-audio/v2.1.0",
-        addonZip("SpokenBossesAudio-2.1.0.zip", "2.1.0", Map.of("SpokenBossesAudio", "")));
+    github.release(REPO, "bosses-audio/v2.1.0", bossesAudio("2.1.0"));
     var before = Files.readString(config);
 
     assertThat(run("add", "Spoken-Bosses-Audio")).as(err.toString()).isEqualTo(0);
@@ -552,10 +551,7 @@ final class CliTest {
         .contains("[games.test.addons.rec]", "asset = \"Polestar_Recorder-*.zip\"");
 
     // spoken's asset belongs with its tag prefix: another prefix takes neither.
-    github.release(
-        REPO,
-        "bosses-audio/v2.1.0",
-        addonZip("SpokenBossesAudio-2.1.0.zip", "2.1.0", Map.of("SpokenBossesAudio", "")));
+    github.release(REPO, "bosses-audio/v2.1.0", bossesAudio("2.1.0"));
     assertThat(run("add", "spoken", "--name", "bosses", "--tag-prefix", "bosses-audio/", "-n"))
         .as(err.toString())
         .isEqualTo(0);

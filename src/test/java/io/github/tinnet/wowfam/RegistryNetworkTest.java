@@ -2,7 +2,6 @@ package io.github.tinnet.wowfam;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.tinnet.wowfam.backend.Asset;
 import io.github.tinnet.wowfam.backend.Http;
 import io.github.tinnet.wowfam.backend.ReleaseSelector;
 import io.github.tinnet.wowfam.backend.github.GitHubApi;
@@ -42,22 +41,28 @@ final class RegistryNetworkTest {
   void resolvesForForever(Registry.Entry entry) {
     var options = new HashMap<>(entry.options());
     options.put("flavor", "forever");
-    assertThat(resolve(entry, options)).as(entry.name()).isPresent();
+    assertThat(resolve(entry, options))
+        .as(entry.name())
+        .hasValueSatisfying(zip -> assertThat(zip).endsWith(".zip"));
   }
 
   @MethodSource("entries")
   @ParameterizedTest
   void resolvesForAnUnknownGame(Registry.Entry entry) {
-    assertThat(resolve(entry, entry.options())).as(entry.name()).isPresent();
+    assertThat(resolve(entry, entry.options()))
+        .as(entry.name())
+        .hasValueSatisfying(zip -> assertThat(zip).endsWith(".zip"));
   }
 
-  /** What add does: discover the rest of the entry, then pick the newest release it resolves. */
-  private static Optional<Asset> resolve(Registry.Entry entry, Map<String, String> options) {
+  /**
+   * What add does: discover the rest of the entry, then pick the newest release it resolves. The
+   * name of that release's zip.
+   */
+  private static Optional<String> resolve(Registry.Entry entry, Map<String, String> options) {
     var spec =
         BACKEND.discover(
             new AddonSpec(entry.name(), entry.source(), AddonSpec.LATEST, List.of(), options));
     var release = ReleaseSelector.newest(BACKEND, spec, BACKEND.releases(spec));
-    release.ifPresent(r -> assertThat(r.asset().name()).as(entry.name()).endsWith(".zip"));
-    return release.map(r -> r.asset());
+    return release.map(r -> r.asset().name());
   }
 }

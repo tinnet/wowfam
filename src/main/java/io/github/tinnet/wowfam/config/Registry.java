@@ -1,8 +1,10 @@
 package io.github.tinnet.wowfam.config;
 
+import static java.util.Collections.unmodifiableSequencedMap;
 import static java.util.Comparator.comparingInt;
 import static java.util.Comparator.naturalOrder;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -21,16 +23,29 @@ import java.util.Optional;
  */
 public final class Registry {
 
-  /** The options an entry may preset, in the order they are shown. */
-  public static final List<String> OPTIONS = List.of("tag_prefix", "asset", "prerelease");
+  /**
+   * The options an entry may preset, in the order they are shown. Together they pick one thing out
+   * of a repository, which is why {@code add} drops them all when the user gives either.
+   */
+  public static final List<String> OPTIONS = List.of("tag_prefix", "asset");
 
-  /** A well-known addon: its name in the registry and the entry {@code add} starts from. */
+  /**
+   * A well-known addon: its name in the registry and the entry {@code add} starts from. Its options
+   * iterate in {@link #OPTIONS} order.
+   */
   public record Entry(String name, Source source, Map<String, String> options) {
     public Entry {
       if (!OPTIONS.containsAll(options.keySet())) {
         throw new IllegalArgumentException(name + ": options must be among " + OPTIONS);
       }
-      options = Map.copyOf(options);
+      var ordered = new LinkedHashMap<String, String>();
+      for (var key : OPTIONS) {
+        var value = options.get(key);
+        if (value != null) {
+          ordered.put(key, value);
+        }
+      }
+      options = unmodifiableSequencedMap(ordered);
     }
   }
 

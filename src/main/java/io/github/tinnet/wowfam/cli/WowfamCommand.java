@@ -106,24 +106,17 @@ public final class WowfamCommand implements Runnable {
         console != null && console.isTerminal()
             ? Optional.of(new BufferedReader(new InputStreamReader(System.in, console.charset())))
             : Optional.<BufferedReader>empty();
-    return newCommandLine(env, cacheDir -> defaultBackends(env, cacheDir), answers);
-  }
-
-  public static CommandLine newCommandLine(
-      Map<String, String> env, Function<Path, Backends> backends) {
-    return newCommandLine(env, backends, Optional.empty());
-  }
-
-  public static CommandLine newCommandLine(
-      Map<String, String> env,
-      Function<Path, Backends> backends,
-      Optional<BufferedReader> answers) {
-    return newCommandLine(env, System.getProperty("os.name", ""), backends, answers);
+    return newCommandLine(
+        env,
+        System.getProperty("os.name", ""),
+        cacheDir -> defaultBackends(env, cacheDir),
+        answers);
   }
 
   /**
-   * The CLI as it runs on {@code os}. Tests give one so that what {@code init} finds doesn't depend
-   * on the machine: on macOS it would also look in the real {@code /Applications}.
+   * The CLI as it runs on {@code os} with {@code env}. Tests give an OS so that what {@code init}
+   * finds doesn't depend on the machine: on macOS it would also look in the real {@code
+   * /Applications}.
    */
   public static CommandLine newCommandLine(
       Map<String, String> env,

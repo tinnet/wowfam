@@ -127,14 +127,18 @@ public final class GitHubBackend implements Backend {
     boolean prereleases = spec.option("prerelease").filter(Boolean::parseBoolean).isPresent();
     boolean byFlavor = target(spec).isPresent();
 
-    var offered = new LinkedHashMap<GitHubApi.GitHubRelease, Version>();
+    record Offer(
+        GitHubApi.GitHubRelease release,
+        Version version,
+        Optional<GitHubApi.GitHubAsset> manifest) {}
+    var offered = new ArrayList<Offer>();
     for (var release : listed(repo)) {
       if (release.draft() || (release.prerelease() && !prereleases)) {
         continue;
       }
       var version = versionOf(release.tag(), prefix);
       if (version.isPresent() && (prereleases || !version.orElseThrow().isPrerelease())) {
-        offered.put(release, version.orElseThrow());
+        offered.add(new Offer(release, version.orElseThrow(), manifestOf(release)));
       }
     }
     // For a game, a release from before the addon shipped release.json can't say which zip is for
@@ -142,17 +146,16 @@ public final class GitHubBackend implements Backend {
     // retail, once its newer releases have no retail zip. Releases without one that came later
     // (an addon that stopped using the packager) are still picked by asset.
     var newestWithManifest =
-        offered.entrySet().stream()
-            .filter(e -> hasManifest(e.getKey()))
-            .map(Map.Entry::getValue)
+        offered.stream()
+            .filter(o -> o.manifest().isPresent())
+            .map(Offer::version)
             .max(naturalOrder());
 
     var result = new ArrayList<Release>();
-    for (var offer : offered.entrySet()) {
-      var release = offer.getKey();
-      var version = offer.getValue();
-      var manifest =
-          release.assets().stream().filter(a -> a.name().equals(RELEASE_JSON)).findFirst();
+    for (var offer : offered) {
+      var release = offer.release();
+      var version = offer.version();
+      var manifest = offer.manifest();
       if (byFlavor
           && manifest.isEmpty()
           && newestWithManifest.filter(newest -> version.compareTo(newest) < 0).isPresent()) {
@@ -220,9 +223,7 @@ public final class GitHubBackend implements Backend {
             .orElseThrow(() ->
                 new BackendException(
                     "no release of " + repo + " has a tag like " + prefix + "v1.2.3"));
-    boolean byFlavor =
-        target(spec).isPresent()
-            && newest.assets().stream().anyMatch(a -> a.name().equals(RELEASE_JSON));
+    boolean byFlavor = target(spec).isPresent() && manifestOf(newest).isPresent();
     if (spec.option("asset").isEmpty() && !byFlavor) {
       options.put("asset", assetPattern(spec, newest, prefix));
     }
@@ -323,7 +324,7 @@ public final class GitHubBackend implements Backend {
         return chosen.getFirst();
       }
     }
-    boolean manifest = release.assets().stream().anyMatch(a -> a.name().equals(RELEASE_JSON));
+    boolean manifest = manifestOf(release).isPresent();
     throw new BackendException(
         release.tag()
             + " of "
@@ -365,8 +366,9 @@ public final class GitHubBackend implements Backend {
     return text.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
   }
 
-  private static boolean hasManifest(GitHubApi.GitHubRelease release) {
-    return release.assets().stream().anyMatch(a -> a.name().equals(RELEASE_JSON));
+  /** The release's {@code release.json}, if the packager attached one. */
+  private static Optional<GitHubApi.GitHubAsset> manifestOf(GitHubApi.GitHubRelease release) {
+    return release.assets().stream().filter(a -> a.name().equals(RELEASE_JSON)).findFirst();
   }
 
   private static boolean isZip(String name) {

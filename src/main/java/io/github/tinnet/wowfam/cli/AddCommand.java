@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.stream.Stream;
@@ -115,9 +116,13 @@ final class AddCommand implements Callable<Integer> {
     var workspace = root.loadWorkspace();
     var config = root.oneGame(workspace);
     // A bare word was never a source, so it can only be a well-known addon's name.
-    var known = Registry.isName(source) ? Registry.require(source) : null;
-    var src = known != null ? known.source() : Source.fromInput(source);
-    var addonName = name != null ? name : known != null ? known.name() : defaultName(src);
+    var known =
+        Registry.isName(source)
+            ? Optional.of(Registry.require(source))
+            : Optional.<Registry.Entry>empty();
+    var src = known.map(Registry.Entry::source).orElseGet(() -> Source.fromInput(source));
+    var addonName =
+        name != null ? name : known.map(Registry.Entry::name).orElseGet(() -> defaultName(src));
     if (!ConfigEditor.NAME.matcher(addonName).matches()) {
       throw new ConfigException(
           "'" + addonName + "' cannot be an addon name: use letters, digits, - and _");
@@ -136,8 +141,8 @@ final class AddCommand implements Callable<Integer> {
     // prefix and zip), so the user's own --tag-prefix or --asset replaces them all rather than
     // leaving the others to find nothing. discover() fills in what is left.
     var options = new LinkedHashMap<String, String>();
-    if (known != null && tagPrefix == null && asset == null) {
-      options.putAll(known.options());
+    if (tagPrefix == null && asset == null) {
+      known.ifPresent(k -> options.putAll(k.options()));
     }
     putIfSet(options, "tag_prefix", tagPrefix);
     putIfSet(options, "asset", asset);

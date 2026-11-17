@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -22,9 +21,7 @@ final class RegistryTest {
           assertThat(e.name())
               .matches(ConfigEditor.NAME)
               .isEqualTo(e.name().toLowerCase(Locale.ROOT));
-          assertThat(Registry.isName(e.name())).isTrue();
           assertThat(Source.parse(e.source().toString())).isEqualTo(e.source());
-          assertThat(e.options().keySet()).isSubsetOf(Registry.OPTIONS);
           // The table it becomes must parse like one written by hand.
           ConfigEditor.addonTable(
               "g", new AddonSpec(e.name(), e.source(), AddonSpec.LATEST, List.of(), e.options()));
@@ -57,24 +54,18 @@ final class RegistryTest {
     var documented =
         Files.readAllLines(Path.of("docs/well-known-addons.md")).stream()
             .filter(line -> line.startsWith("| `"))
-            .map(line ->
-                Arrays.stream(line.substring(1, line.lastIndexOf('|')).split("\\|"))
-                    .map(String::strip)
-                    .collect(joining(" | "))
-                    .strip())
+            .map(line -> line.replaceAll(" *\\| *", "|"))
             .toList();
     var expected =
         Registry.all().stream()
             .map(e ->
-                "`%s` | `%s` | %s"
+                "|`%s`|`%s`|%s|"
                     .formatted(
                         e.name(),
                         e.source(),
-                        Registry.OPTIONS.stream()
-                            .filter(e.options()::containsKey)
-                            .map(k -> "`%s = \"%s\"`".formatted(k, e.options().get(k)))
-                            .collect(joining(", ")))
-                    .strip())
+                        e.options().entrySet().stream()
+                            .map(o -> "`%s = \"%s\"`".formatted(o.getKey(), o.getValue()))
+                            .collect(joining(", "))))
             .toList();
     assertThat(documented).containsExactlyElementsOf(expected);
   }

@@ -14,31 +14,25 @@ import picocli.CommandLine.Spec;
     description = {
       "The well-known addons, which wowfam add takes by name (wowfam add questie).",
       "Without a subcommand, lists them."
-    },
-    subcommands = RegistryCommand.RegistryListCommand.class)
+    })
 final class RegistryCommand implements Callable<Integer> {
 
   @Spec CommandSpec spec;
 
+  /** Every entry with what {@code add} starts from; needs no wowfam.toml. */
   @Override
   public Integer call() {
-    print(spec);
-    return 0;
-  }
-
-  /** Every entry with what {@code add} starts from; needs no wowfam.toml. */
-  static void print(CommandSpec spec) {
     var table = new Table("NAME", "SOURCE", "OPTIONS");
     for (var entry : Registry.all()) {
       table.row(
           entry.name(),
           entry.source().toString(),
-          Registry.OPTIONS.stream()
-              .filter(entry.options()::containsKey)
-              .map(key -> key + "=" + entry.options().get(key))
+          entry.options().entrySet().stream()
+              .map(o -> o.getKey() + "=" + o.getValue())
               .collect(joining(" ")));
     }
     table.print(spec.commandLine().getOut());
+    return 0;
   }
 
   @Command(
@@ -46,14 +40,7 @@ final class RegistryCommand implements Callable<Integer> {
       aliases = "list",
       mixinStandardHelpOptions = true,
       description = "List the well-known addons, their sources and the options add starts from.")
-  static final class RegistryListCommand implements Callable<Integer> {
-
-    @Spec CommandSpec spec;
-
-    @Override
-    public Integer call() {
-      print(spec);
-      return 0;
-    }
+  int ls() {
+    return call();
   }
 }
