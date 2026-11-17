@@ -503,6 +503,60 @@ final class CliTest {
   }
 
   @Test
+  void addTakesAWellKnownAddonByName() throws Exception {
+    github.release(
+        REPO,
+        "bosses-audio/v2.1.0",
+        addonZip("SpokenBossesAudio-2.1.0.zip", "2.1.0", Map.of("SpokenBossesAudio", "")));
+    var before = Files.readString(config);
+
+    assertThat(run("add", "Spoken-Bosses-Audio")).as(err.toString()).isEqualTo(0);
+    // The entry is the resolved one, not the registry name.
+    assertThat(config)
+        .content()
+        .isEqualTo(
+            "%s\n%s",
+            before,
+            """
+            [games.test.addons.spoken-bosses-audio]
+            source = "github:rusty-key/spoken-wow"
+            version = "latest"
+            tag_prefix = "bosses-audio/"
+            asset = "SpokenBossesAudio-*.zip"
+            """);
+    assertThat(addons.resolve("SpokenBossesAudio")).isDirectory();
+
+    // The registry's spoken is the configured one.
+    assertThat(run("add", "spoken", "--name", "again", "-n")).isEqualTo(1);
+    assertThat(err.toString()).contains("github:rusty-key/spoken-wow is already in", "as spoken");
+  }
+
+  @Test
+  void addTakesTheUsersOptionsOverTheRegistrys() throws Exception {
+    github.release(
+        "fitzforge/polestar",
+        "v0.3.7",
+        addonZip("Polestar-0.3.7.zip", "0.3.7", Map.of("Polestar", "")),
+        addonZip("Polestar_Recorder-0.3.7.zip", "0.3.7", Map.of("Polestar_Recorder", "")));
+
+    assertThat(run("add", "polestar", "--name", "rec", "--asset", "Polestar_Recorder-*.zip", "-n"))
+        .as(err.toString())
+        .isEqualTo(0);
+    assertThat(out.toString())
+        .contains("[games.test.addons.rec]", "asset = \"Polestar_Recorder-*.zip\"");
+  }
+
+  @Test
+  void addSaysWhenANameIsNotWellKnown() {
+    int requests = github.requests().size();
+    assertThat(run("add", "questy")).isEqualTo(1);
+    assertThat(err.toString())
+        .contains("'questy' is not a well-known addon; did you mean questie?")
+        .doesNotContain("\tat ");
+    assertThat(github.requests()).hasSize(requests);
+  }
+
+  @Test
   void addTakesTheEntryOutAgainWhenTheInstallFails() throws Exception {
     // An earlier addon of the same name, taken out of wowfam.toml but still in the lock, must not
     // make the failed add look installed.

@@ -8,7 +8,7 @@ How wowfam works inside. The [README](../README.md) describes what it does for u
 | Package       | What                                                                                  |
 |---------------|---------------------------------------------------------------------------------------|
 | `cli`         | picocli commands (`init`, `add`, `remove`, `install`, `update`, `list`, `outdated`), output tables |
-| `config`      | `wowfam.toml` model, loader and text editor; finding WoW installs; game detection     |
+| `config`      | `wowfam.toml` model, loader and text editor; finding WoW installs; game detection; well-known addons |
 | `backend`     | the `Backend` interface, release selection, HTTP; `backend.github` is GitHub releases |
 | `install`     | download → verify → unpack → swap folders; zip-slip-safe extraction; `.toc` parsing; hooks |
 | `lock`        | `wowfam.lock`                                                                         |
@@ -72,6 +72,14 @@ Afterwards every installed folder's `.toc` is read, and required dependencies
 
 `add` builds an entry from what the user gave, asks the backend to `discover` the rest, checks
 the entry finds and resolves a release, and only then writes it.
+
+A bare word (no `/`, `:` or `.`) was never a source, so it names a well-known addon
+(`Registry`, listed in [`well-known-addons.md`](well-known-addons.md)): its source and preset
+options are where `add` starts, the user's options go over them, and `discover` fills in the rest.
+The resolved entry is written, not the name, so the registry is only consulted by `add`: nothing
+else knows it exists, and re-pointing a name to another repository never moves an existing setup.
+It is a Java table rather than a bundled TOML file so the native image needs no resource
+configuration and a malformed entry fails the build.
 
 The GitHub backend works out options the way one would by reading the release page:
 

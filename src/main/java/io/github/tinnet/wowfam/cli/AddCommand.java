@@ -8,6 +8,7 @@ import io.github.tinnet.wowfam.config.AddonSpec;
 import io.github.tinnet.wowfam.config.Config;
 import io.github.tinnet.wowfam.config.ConfigEditor;
 import io.github.tinnet.wowfam.config.ConfigException;
+import io.github.tinnet.wowfam.config.Registry;
 import io.github.tinnet.wowfam.config.Source;
 import io.github.tinnet.wowfam.install.Installer;
 import io.github.tinnet.wowfam.lock.LockFile;
@@ -33,6 +34,7 @@ import picocli.CommandLine.Spec;
     name = "add",
     description = {
       "Add an addon to wowfam.toml and install it.",
+      "SOURCE can also be the name of a well-known addon, such as questie or spoken.",
       "Works out tag_prefix and asset from the source's releases, checks that they find a "
           + "release, appends the entry (comments and layout of the file are kept) and prints it."
     })
@@ -52,7 +54,9 @@ final class AddCommand implements Callable<Integer> {
   @Parameters(
       index = "0",
       paramLabel = "SOURCE",
-      description = "github:owner/repo, owner/repo, or a https://github.com/owner/repo URL.")
+      description =
+          "github:owner/repo, owner/repo, a https://github.com/owner/repo URL, or the name of a "
+              + "well-known addon.")
   String source = "";
 
   @Option(
@@ -108,8 +112,10 @@ final class AddCommand implements Callable<Integer> {
   public Integer call() {
     var workspace = root.loadWorkspace();
     var config = root.oneGame(workspace);
-    var src = Source.fromInput(source);
-    var addonName = name != null ? name : defaultName(src);
+    // A bare word was never a source, so it can only be a well-known addon's name.
+    var known = Registry.isName(source) ? Registry.require(source) : null;
+    var src = known != null ? known.source() : Source.fromInput(source);
+    var addonName = name != null ? name : known != null ? known.name() : defaultName(src);
     if (!ConfigEditor.NAME.matcher(addonName).matches()) {
       throw new ConfigException(
           "'" + addonName + "' cannot be an addon name: use letters, digits, - and _");
@@ -124,7 +130,11 @@ final class AddCommand implements Callable<Integer> {
                   + config.name()
                   + "; pick another --name");
     }
+    // The user's options over the registry's, and discover() fills in what neither gives.
     var options = new LinkedHashMap<String, String>();
+    if (known != null) {
+      options.putAll(known.options());
+    }
     putIfSet(options, "tag_prefix", tagPrefix);
     putIfSet(options, "asset", asset);
     putIfSet(options, "flavor", flavor);

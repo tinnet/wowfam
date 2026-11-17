@@ -94,7 +94,8 @@ and `remove` work on `settings.default_game` (or the only game) unless `-g` name
 
 ### `wowfam add`
 
-The source can be a GitHub URL, `owner/repo`, or `github:owner/repo`. Most addons need nothing
+The source can be a GitHub URL, `owner/repo`, `github:owner/repo`, or the name of a
+[well-known addon](docs/well-known-addons.md) such as `questie`. Most addons need nothing
 else. When a repository publishes more than one thing, `add` picks the one named like the
 repository: Spoken's addon over its desktop manager, Polestar's addon zip over its optional
 recorder. When it can't tell, it says which option to give.
