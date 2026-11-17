@@ -5,8 +5,8 @@ How to build, test and release wowfam. [`AGENTS.md`](../AGENTS.md) has the worki
 
 ## Tools
 
-Tools are pinned in [`mise.toml`](../mise.toml): GraalVM 25, Gradle, just, lefthook and
-betterleaks. Tasks live in the [`justfile`](../justfile):
+Tools are pinned in [`mise.toml`](../mise.toml): GraalVM 25, Gradle, just, lefthook,
+betterleaks, git-cliff and merman. Tasks live in the [`justfile`](../justfile):
 
 ```sh
 just setup          # mise install + lefthook install (git hooks)
@@ -22,6 +22,10 @@ just secrets        # betterleaks over the tree and the git history
 just changelog      # what the next release's notes would say
 just release        # write CHANGELOG.md, tag today's CalVer release (vYYYY.MM.DD), push both
 ```
+
+The Mermaid diagrams in `docs/` are checked with [merman](https://github.com/Latias94/merman):
+`merman-cli lint --format text docs/addon-sources.md` reports mistakes, and
+`merman-cli batch docs/addon-sources.md -o <dir>` renders each diagram to SVG to look at.
 
 There is no Gradle wrapper. mise installs the Gradle pinned in `mise.toml`; without mise, any
 Gradle 9.9 on the `PATH` works, and its toolchain support (with the foojay resolver) downloads a

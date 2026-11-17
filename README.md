@@ -286,6 +286,40 @@ export GITHUB_TOKEN=$(gh auth token)
 `HTTPS_PROXY` and `NO_PROXY` are honoured. Behind a proxy that intercepts TLS, point wowfam at a
 trust store that has its certificate: `wowfam -Djavax.net.ssl.trustStore=/path/to/cacerts …`.
 
+## FAQ
+
+Questions we expect, about where wowfam gets addons from. The background, with sources, is in
+[Where WoW addons come from](docs/addon-sources.md).
+
+**Where does wowfam download addons from?**
+From GitHub releases, and nothing else for now. Most addons are built with the BigWigs packager,
+which publishes every release to GitHub alongside CurseForge, Wago and WoWInterface.
+
+**Why not CurseForge?**
+CurseForge's API takes a key that Overwolf, which owns CurseForge, approves per app and doesn't let
+you share. An open-source tool can't keep one secret, and the apps that have one show CurseForge's
+ads in exchange: WowUp's CurseForge edition runs on Overwolf's own Electron to do it.
+
+**Why not Wago?**
+Wago pays addon authors from ad revenue, so apps that install from it show Wago's ads. WowUp does,
+unless you have a Wago access key. A command-line tool has nowhere to show them.
+
+**What about WoWInterface?**
+It has an API that WowUp reads, and it would be the natural next backend. wowfam doesn't support it
+yet.
+
+**My addon isn't on GitHub. What now?**
+Ask its author: if they use the BigWigs packager, a GitHub release is one setting away. Until then,
+keep it in AddOns by hand or with another manager; wowfam leaves folders it didn't install alone.
+
+**Can I use wowfam next to WowUp or the CurseForge app?**
+Yes, as long as each addon has one manager. wowfam only touches the folders it installed, and
+taking over an addon that's already there is `wowfam add`.
+
+**Does wowfam show ads or pay authors?**
+No to both. Authors aren't paid for GitHub downloads; if an addon you use has a Patreon or similar,
+that's the way to support it.
+
 ## Contributing
 
 [`docs/development.md`](docs/development.md) covers building, testing and releasing;
