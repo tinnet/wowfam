@@ -74,6 +74,9 @@ public final class WowfamCommand implements Runnable {
 
   final Map<String, String> env;
 
+  /** The operating system's name, as in {@code os.name}: where to look for games and config. */
+  final String os;
+
   /** The backends, given the cache directory of the config they serve. */
   private final Function<Path, Backends> backends;
 
@@ -82,9 +85,11 @@ public final class WowfamCommand implements Runnable {
 
   public WowfamCommand(
       Map<String, String> env,
+      String os,
       Function<Path, Backends> backends,
       Optional<BufferedReader> answers) {
     this.env = env;
+    this.os = os;
     this.backends = backends;
     this.answers = answers;
   }
@@ -112,7 +117,19 @@ public final class WowfamCommand implements Runnable {
       Map<String, String> env,
       Function<Path, Backends> backends,
       Optional<BufferedReader> answers) {
-    var cl = new CommandLine(new WowfamCommand(env, backends, answers));
+    return newCommandLine(env, System.getProperty("os.name", ""), backends, answers);
+  }
+
+  /**
+   * The CLI as it runs on {@code os}. Tests give one so that what {@code init} finds doesn't depend
+   * on the machine: on macOS it would also look in the real {@code /Applications}.
+   */
+  public static CommandLine newCommandLine(
+      Map<String, String> env,
+      String os,
+      Function<Path, Backends> backends,
+      Optional<BufferedReader> answers) {
+    var cl = new CommandLine(new WowfamCommand(env, os, backends, answers));
     cl.setExecutionExceptionHandler((ex, commandLine, parseResult) -> {
       if (ex instanceof ConfigException
           || ex instanceof BackendException
@@ -157,7 +174,7 @@ public final class WowfamCommand implements Runnable {
   Path configFile() {
     return config != null
         ? config.toAbsolutePath().normalize()
-        : defaultConfigFile(env, home(), System.getProperty("os.name", ""));
+        : defaultConfigFile(env, home(), os);
   }
 
   /**

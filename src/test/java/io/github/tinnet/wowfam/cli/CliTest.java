@@ -99,13 +99,20 @@ final class CliTest {
     return runAs(Map.of(), Optional.empty(), full);
   }
 
-  /** The CLI as a user with {@code env} runs it, answering questions with {@code answers}. */
+  /**
+   * The CLI as a user with {@code env} runs it, answering questions with {@code answers}. Always as
+   * on Linux, where every place {@code init} looks is under {@code $HOME}: on macOS it would also
+   * find a real {@code /Applications/World of Warcraft}.
+   */
   private int runAs(Map<String, String> env, Optional<String> answers, String... args) {
     out = new StringWriter();
     err = new StringWriter();
     var cl =
         WowfamCommand.newCommandLine(
-            env, github::backends, answers.map(a -> new BufferedReader(new StringReader(a))));
+            env,
+            "Linux",
+            github::backends,
+            answers.map(a -> new BufferedReader(new StringReader(a))));
     cl.setOut(new PrintWriter(out, true));
     cl.setErr(new PrintWriter(err, true));
     return cl.execute(args);

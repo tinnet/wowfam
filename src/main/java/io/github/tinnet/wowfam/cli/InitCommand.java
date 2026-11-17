@@ -90,9 +90,7 @@ final class InitCommand implements Callable<Integer> {
     } else if (importFile != null) {
       candidates = List.of();
     } else {
-      candidates =
-          WowInstalls.find(System.getProperty("os.name", ""), root.env, root.home()).stream()
-              .toList();
+      candidates = WowInstalls.find(root.os, root.env, root.home()).stream().toList();
     }
     var fresh = candidates.stream().filter(f -> !configured.contains(real(f.dir()))).toList();
     if (!candidates.isEmpty() && fresh.isEmpty()) {
