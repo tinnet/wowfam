@@ -2,6 +2,20 @@
 
 What changed in each wowfam release. Versions are dates (CalVer).
 
+## 2026.11.17
+
+### Features
+
+- **cli**: Add well-known addons by name, e.g. wowfam add questie ([4b0d3f0](https://github.com/tinnet/wowfam/commit/4b0d3f08783e9fef7a339e0a6f7f27e4ef27886d))
+- **cli**: Add wowfam registry to list the well-known addons ([848922d](https://github.com/tinnet/wowfam/commit/848922d9d283805c01483933ca1e9a3c341985af))
+- **cli**: Add whatstraining and foreverplusplus to the well-known addons ([dfd032c](https://github.com/tinnet/wowfam/commit/dfd032cca69f25b8aab73e4968043f83b0d13918))
+
+### Fixes
+
+- **cli**: Stop --help printing picocli format warnings ([62b1a62](https://github.com/tinnet/wowfam/commit/62b1a62225b4fa63d3430b1f6f5ce933a5d9115e))
+- **cli**: Let your own --tag-prefix or --asset replace a well-known addon's ([cf608ee](https://github.com/tinnet/wowfam/commit/cf608eecd191f9fad164be350acffe799ae28d9e))
+- **github**: Don't fall back to releases from before an addon shipped release.json ([4c8426a](https://github.com/tinnet/wowfam/commit/4c8426a38e6555703944b83c37a770b87ad112d2))
+
 ## 2026.11.14
 
 ### Features
