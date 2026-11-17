@@ -11,6 +11,7 @@ import io.github.tinnet.wowfam.config.ConfigException;
 import io.github.tinnet.wowfam.config.Registry;
 import io.github.tinnet.wowfam.config.Source;
 import io.github.tinnet.wowfam.install.Installer;
+import io.github.tinnet.wowfam.install.Progress;
 import io.github.tinnet.wowfam.lock.LockFile;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -221,11 +222,14 @@ final class AddCommand implements Callable<Integer> {
     var unmanaged = unmanagedFolders(updated);
     var lockedBefore = LockFile.read(updated.lockFile(), updated.name()).get(addonName);
     Installer.Report report;
+    var live = Reports.live(root, spec);
     try {
+      Progress progress = live.isPresent() ? live.orElseThrow() : Progress.lines(out::println);
       report =
-          new Installer(backends, out::println, !noHooks)
+          new Installer(backends, progress, !noHooks)
               .run(updated, List.of(addonName), Installer.Mode.INSTALL, false);
     } catch (RuntimeException e) {
+      live.ifPresent(LiveProgress::close);
       // Keep wowfam.toml and the AddOns folder in step: an addon that did not get installed (a
       // failed download, a pre_install hook saying no) is taken out again. One that did, but whose
       // post_install hook failed, is locked and stays. A lock entry left over from an earlier
@@ -236,7 +240,8 @@ final class AddCommand implements Callable<Integer> {
       }
       throw e;
     }
-    int status = Reports.print(spec, report);
+    live.ifPresent(LiveProgress::close);
+    int status = Reports.print(spec, report, live.isEmpty());
     report.outcomes().stream()
         .flatMap(o -> o.folders().stream())
         .filter(unmanaged::contains)

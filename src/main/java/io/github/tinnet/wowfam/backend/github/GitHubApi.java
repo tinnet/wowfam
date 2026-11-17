@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.LongConsumer;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JacksonException;
@@ -96,7 +97,8 @@ public final class GitHubApi {
     return response.body();
   }
 
-  public void download(URI url, Path target) {
+  /** Downloads {@code url} to {@code target}, telling {@code progress} the bytes so far. */
+  public void download(URI url, Path target, LongConsumer progress) {
     var response =
         send(
             get(url).header("Accept", OCTET_STREAM).build(),
@@ -107,7 +109,15 @@ public final class GitHubApi {
       }
       Files.createDirectories(target.toAbsolutePath().getParent());
       var tmp = target.resolveSibling(target.getFileName() + ".part");
-      Files.copy(body, tmp, StandardCopyOption.REPLACE_EXISTING);
+      try (var file = Files.newOutputStream(tmp)) {
+        var buffer = new byte[64 * 1024];
+        long done = 0;
+        for (int n; (n = body.read(buffer)) != -1; ) {
+          file.write(buffer, 0, n);
+          done += n;
+          progress.accept(done);
+        }
+      }
       Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     } catch (IOException e) {
       throw new BackendException("download of " + url + " failed: " + e.getMessage(), e);

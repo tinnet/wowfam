@@ -4,6 +4,7 @@ import io.github.tinnet.wowfam.config.AddonSpec;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.LongConsumer;
 
 /**
  * A place addons are published, selected by the part of {@code source} before the colon. Mirrors
@@ -44,4 +45,12 @@ public interface Backend {
 
   /** Downloads the asset to {@code target}, replacing it if present. */
   void download(Asset asset, Path target);
+
+  /**
+   * {@link #download(Asset, Path)}, telling {@code progress} how many bytes have arrived so far.
+   * Backends that can't count call it never.
+   */
+  default void download(Asset asset, Path target, LongConsumer progress) {
+    download(asset, target);
+  }
 }

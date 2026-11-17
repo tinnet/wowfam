@@ -7,7 +7,7 @@ How wowfam works inside. The [README](../README.md) describes what it does for u
 
 | Package       | What                                                                                  |
 |---------------|---------------------------------------------------------------------------------------|
-| `cli`         | picocli commands (`init`, `add`, `remove`, `install`, `update`, `list`, `outdated`, `registry`), output tables |
+| `cli`         | picocli commands (`init`, `add`, `remove`, `install`, `update`, `list`, `outdated`, `registry`), output tables, live progress |
 | `config`      | `wowfam.toml` model, loader and text editor; finding WoW installs; game detection; well-known addons |
 | `backend`     | the `Backend` interface, release selection, HTTP; `backend.github` is GitHub releases |
 | `install`     | download → verify → unpack → swap folders; zip-slip-safe extraction; `.toc` parsing; hooks |
@@ -73,7 +73,24 @@ Checksums are stored as `<algorithm>:<hex>`; a lock from before that (`sha256 = 
 rewritten on first read.
 
 Afterwards every installed folder's `.toc` is read, and required dependencies
-(`## Dependencies`, `## RequiredDeps`) missing from AddOns are reported as warnings.
+(`## Dependencies`, `## RequiredDeps`) missing from AddOns are reported as warnings. The `.toc`
+files are scanned line by line for those keys alone: some addons keep data in them (QuestieDB's
+run to tens of megabytes each).
+
+### Progress
+
+The installer reports to an `install.Progress`: lines to keep (`log`), what an addon is doing now
+(`status`, `step`), download bytes (`bytes`, fed by `Backend.download`'s callback) and each
+addon's outcome (`finished`). Its default prints every `log` and `status` as a line, which is what
+pipes, tests and `TERM=dumb` get, and the report's outcomes are printed at the end.
+
+On an interactive terminal `cli.LiveProgress` takes its place. It draws a status block with JLine's
+`Display` (a spinner, addons done, the current addon and its download), redrawn ten times a second
+by a daemon thread, and prints each finished addon's line above the block as it happens, so the
+scrollback keeps those lines and nothing else. It hides the cursor while it runs and puts it back
+on close or on Ctrl-C (a shutdown hook). JLine reaches the terminal through its FFM provider
+(`java.lang.foreign`), so the native image needs no JNI library; it is built with
+`--enable-native-access=ALL-UNNAMED`, and JLine's jars bring their own native-image configuration.
 
 ## `wowfam add`
 

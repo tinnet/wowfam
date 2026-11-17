@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.LongConsumer;
 import java.util.function.ToIntFunction;
 import java.util.regex.Pattern;
 import tools.jackson.core.JacksonException;
@@ -578,7 +579,12 @@ public final class GitHubBackend implements Backend {
 
   @Override
   public void download(Asset asset, Path target) {
-    api.download(asset.url(), target);
+    api.download(asset.url(), target, done -> {});
+  }
+
+  @Override
+  public void download(Asset asset, Path target, LongConsumer progress) {
+    api.download(asset.url(), target, progress);
   }
 
   /** The version in {@code tag} after {@code prefix}, if the tag has that prefix and a version. */

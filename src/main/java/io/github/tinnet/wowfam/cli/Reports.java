@@ -2,7 +2,9 @@ package io.github.tinnet.wowfam.cli;
 
 import io.github.tinnet.wowfam.config.ConfigException;
 import io.github.tinnet.wowfam.install.Installer;
+import io.github.tinnet.wowfam.install.Progress;
 import java.util.List;
+import java.util.Optional;
 import picocli.CommandLine.Model.CommandSpec;
 
 final class Reports {
@@ -37,43 +39,41 @@ final class Reports {
     }
     var out = spec.commandLine().getOut();
     int status = 0;
-    for (var game : games) {
-      if (games.size() > 1) {
-        out.println(game.name() + ":");
+    var live = live(root, spec);
+    try {
+      Progress progress = live.isPresent() ? live.orElseThrow() : Progress.lines(out::println);
+      for (var game : games) {
+        if (games.size() > 1) {
+          progress.log(game.name() + ":");
+        }
+        var own = names.stream().filter(game.addons()::containsKey).toList();
+        var report =
+            new Installer(root.backends(game), progress, hooks).run(game, own, mode, force);
+        status |= print(spec, report, live.isEmpty());
       }
-      var own = names.stream().filter(game.addons()::containsKey).toList();
-      status |=
-          print(
-              spec,
-              new Installer(root.backends(game), out::println, hooks).run(game, own, mode, force));
+    } finally {
+      live.ifPresent(LiveProgress::close);
     }
     return status;
   }
 
+  /** Progress for a run that prints to {@code spec}'s output: live on a terminal, else lines. */
+  static Optional<LiveProgress> live(WowfamCommand root, CommandSpec spec) {
+    return LiveProgress.open(root.env, o -> line(spec, o));
+  }
+
   static int print(CommandSpec spec, Installer.Report report) {
+    return print(spec, report, true);
+  }
+
+  /**
+   * Prints the report: each addon's outcome (unless live progress showed them already) and the
+   * dependencies missing from AddOns.
+   */
+  static int print(CommandSpec spec, Installer.Report report, boolean outcomes) {
     var out = spec.commandLine().getOut();
-    for (var o : report.outcomes()) {
-      switch (o.status()) {
-        case INSTALLED ->
-            out.printf("✓ %s %s  (%s)%n", o.addon(), o.version(), String.join(", ", o.folders()));
-        case UPDATED, DOWNGRADED ->
-            out.printf(
-                "%s %s %s -> %s  (%s)%n",
-                o.status() == Installer.Status.UPDATED ? "↑" : "↓",
-                o.addon(),
-                o.previousVersion().orElse("?"),
-                o.version(),
-                String.join(", ", o.folders()));
-        case REMOVED ->
-            out.printf(
-                "- %s %s  (%s)%n",
-                o.addon(),
-                o.version(),
-                o.folders().isEmpty()
-                    ? "its folders belong to another addon now"
-                    : String.join(", ", o.folders()));
-        case UP_TO_DATE -> {}
-      }
+    if (outcomes) {
+      report.outcomes().forEach(o -> line(spec, o).ifPresent(out::println));
     }
     var err = spec.commandLine().getErr();
     report
@@ -83,5 +83,35 @@ final class Reports {
                 "warning: %s requires %s, which is not installed%n",
                 folder, String.join(", ", deps)));
     return 0;
+  }
+
+  /** The line an addon's outcome leaves in the output, coloured if the output takes colour. */
+  static Optional<String> line(CommandSpec spec, Installer.Outcome o) {
+    var ansi = spec.commandLine().getColorScheme().ansi();
+    var folders = String.join(", ", o.folders());
+    return Optional.ofNullable(
+            switch (o.status()) {
+              case INSTALLED ->
+                  "@|green ✓|@ @|bold %s|@ %s  @|faint (%s)|@"
+                      .formatted(o.addon(), o.version(), folders);
+              case UPDATED, DOWNGRADED ->
+                  "%s @|bold %s|@ %s -> %s  @|faint (%s)|@"
+                      .formatted(
+                          o.status() == Installer.Status.UPDATED ? "@|cyan ↑|@" : "@|yellow ↓|@",
+                          o.addon(),
+                          o.previousVersion().orElse("?"),
+                          o.version(),
+                          folders);
+              case REMOVED ->
+                  "@|faint -|@ @|bold %s|@ %s  @|faint (%s)|@"
+                      .formatted(
+                          o.addon(),
+                          o.version(),
+                          o.folders().isEmpty()
+                              ? "its folders belong to another addon now"
+                              : folders);
+              case UP_TO_DATE -> null;
+            })
+        .map(ansi::string);
   }
 }

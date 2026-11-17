@@ -70,20 +70,25 @@ public final class Installer {
   public record Report(List<Outcome> outcomes, Map<String, List<String>> missingDependencies) {}
 
   private final Backends backends;
-  private final Consumer<String> log;
+  private final Progress progress;
   private final boolean runHooks;
 
   public Installer(Backends backends, Consumer<String> log) {
-    this(backends, log, true);
+    this(backends, Progress.lines(log), true);
+  }
+
+  public Installer(Backends backends, Consumer<String> log, boolean runHooks) {
+    this(backends, Progress.lines(log), runHooks);
   }
 
   /**
+   * @param progress where the run reports what it does
    * @param runHooks whether to run the {@code pre_install} and {@code post_install} hooks of the
    *     config
    */
-  public Installer(Backends backends, Consumer<String> log, boolean runHooks) {
+  public Installer(Backends backends, Progress progress, boolean runHooks) {
     this.backends = backends;
-    this.log = log;
+    this.progress = progress;
     this.runHooks = runHooks;
   }
 
@@ -110,9 +115,14 @@ public final class Installer {
       throw new InstallException(
           "cannot create " + settings.addonsDir() + ": " + e.getMessage(), e);
     }
-    for (var spec : config.installOrder(names)) {
+    var order = config.installOrder(names);
+    progress.start(order.size());
+    for (var spec : order) {
       try {
-        outcomes.add(installOne(config, spec, lock, mode, force));
+        progress.step(spec.name(), "resolving");
+        var outcome = installOne(config, spec, lock, mode, force);
+        outcomes.add(outcome);
+        progress.finished(outcome);
       } finally {
         // A failing post_install hook leaves the addon installed; the lock must say so.
         lock.write();
@@ -123,9 +133,11 @@ public final class Installer {
       // of wowfam.toml by hand is uninstalled.
       for (var name : List.copyOf(lock.entries().keySet())) {
         if (!config.addons().containsKey(name)) {
-          log.accept("uninstalling " + name + ", which is no longer in game " + config.name());
+          progress.log("uninstalling " + name + ", which is no longer in game " + config.name());
           try {
-            outcomes.add(uninstall(settings.addonsDir(), lock, name));
+            var outcome = uninstall(settings.addonsDir(), lock, name);
+            outcomes.add(outcome);
+            progress.finished(outcome);
           } finally {
             lock.write();
           }
@@ -184,7 +196,7 @@ public final class Installer {
       // expansion the addon hasn't caught up with): keep what is installed rather than fail. A
       // version nothing satisfies is the user's mistake and stays an error.
       var kept = locked.orElseThrow();
-      log.accept(
+      progress.log(
           "no release of "
               + spec.name()
               + " is for "
@@ -215,7 +227,7 @@ public final class Installer {
             .map(Asset::name)
             .toList()
             .equals(List.of(locked.orElseThrow().asset()))) {
-      log.accept(spec.name() + " " + release.version() + " is up to date");
+      progress.status(spec.name(), spec.name() + " " + release.version() + " is up to date");
       return new Outcome(
           spec.name(),
           Status.UP_TO_DATE,
@@ -230,12 +242,13 @@ public final class Installer {
       throw new BackendException("addons." + spec.name() + ": " + e.getMessage(), e);
     }
     var archive = fetch(config, spec, release);
-    log.accept(
+    progress.status(
+        spec.name(),
         "installing " + spec.name() + " " + release.version() + " from " + release.asset().name());
     var hooks = runHooks ? config.hooksFor(spec) : Hooks.NONE;
     var configDir = config.file().toAbsolutePath().getParent();
     var hookRunner =
-        new HookRunner(configDir == null ? Path.of("").toAbsolutePath() : configDir, log);
+        new HookRunner(configDir == null ? Path.of("").toAbsolutePath() : configDir, progress::log);
     var previous = locked.map(LockEntry::version);
     var folders =
         unpack(
@@ -331,14 +344,17 @@ public final class Installer {
     var target = config.settings().cacheDir().resolve(spec.name()).resolve(asset.name());
     if (Files.exists(target)
         && asset.checksum().filter(c -> c.equals(checksum(target, c.algorithm()))).isPresent()) {
-      log.accept("using cached " + asset.name());
+      progress.status(spec.name(), "using cached " + asset.name());
       return target;
     }
-    log.accept(
+    progress.status(
+        spec.name(),
         "downloading "
             + asset.name()
             + (asset.size() > 0 ? " (" + humanSize(asset.size()) + ")" : ""));
-    backends.get(spec.source().backend()).download(asset, target);
+    backends
+        .get(spec.source().backend())
+        .download(asset, target, done -> progress.bytes(done, asset.size()));
     if (asset.checksum().isPresent()) {
       var expected = asset.checksum().orElseThrow();
       var actual = checksum(target, expected.algorithm());
@@ -463,7 +479,8 @@ public final class Installer {
     }
   }
 
-  static String humanSize(long bytes) {
+  /** {@code 7.8 MB}, in powers of 1024. */
+  public static String humanSize(long bytes) {
     if (bytes < 1024) {
       return bytes + " B";
     }

@@ -93,6 +93,10 @@ and `remove` work on `settings.default_game` (or the only game) unless `-g` name
 `wowfam <command> --help` lists each command's options. Every command also takes `-C FILE` (which
 `wowfam.toml` to use) and `--addons-dir DIR` (install that game's addons somewhere else).
 
+In a terminal, `install`, `update` and `add` show their progress in place, with each addon's
+download, and leave one line per addon that changed. Piped or redirected output, `TERM=dumb` and
+`WOWFAM_PROGRESS=0` get plain lines instead, one per step, for logs and scripts.
+
 ### `wowfam add`
 
 The source can be a GitHub URL, `owner/repo`, `github:owner/repo`, or the name of a

@@ -34,6 +34,10 @@ dependencies {
     compileOnly(libs.graalvm.nativeimage)
     implementation(libs.jackson.databind)
     implementation(libs.jackson.toml)
+    // Progress lines redrawn in place when stdout is a terminal. The FFM provider talks to the
+    // terminal through java.lang.foreign, so the native image needs no JNI library.
+    implementation(libs.jline.terminal)
+    runtimeOnly(libs.jline.terminal.ffm)
     // Generates GraalVM reflection/resource config for the picocli commands at compile time.
     annotationProcessor(libs.picocli.codegen)
 
@@ -88,6 +92,8 @@ sourceSets.main { java.srcDir(generateBuildInfo) }
 application {
     mainClass = "io.github.tinnet.wowfam.Main"
     applicationName = "wowfam"
+    // JLine's FFM terminal provider calls into libc.
+    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
 }
 
 // `gradle compileJava compileTestJava -Perrorprone.patch` (or `just ep-fix`) applies the
@@ -158,6 +164,8 @@ graalvmNative {
                 "-Os",
                 "--enable-url-protocols=https",
                 "-H:+ReportExceptionStackTraces",
+                // JLine's FFM terminal provider calls into libc; without this every run warns.
+                "--enable-native-access=ALL-UNNAMED",
             )
         }
     }

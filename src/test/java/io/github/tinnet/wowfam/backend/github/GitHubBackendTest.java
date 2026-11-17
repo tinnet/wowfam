@@ -155,12 +155,28 @@ final class GitHubBackendTest {
   }
 
   @Test
+  void aDownloadReportsTheBytesSoFar(@TempDir Path tmp) {
+    // Bigger than one 64 KiB read, so the count is reported more than once.
+    var content = new byte[200_000];
+    new java.util.Random(1).nextBytes(content);
+    github.release("o/addon", "v1.0.0", new FakeGitHub.FakeAsset("Addon-1.0.0.zip", content));
+    var api = new GitHubApi(Http.client(Map.of()), github.base(), Optional.empty());
+    var asset = api.releases("o/addon").getFirst().assets().getFirst();
+    var reported = new java.util.ArrayList<Long>();
+
+    api.download(asset.downloadUrl(), tmp.resolve("Addon.zip"), reported::add);
+
+    assertThat(reported).hasSizeGreaterThan(1).isSorted().endsWith((long) content.length);
+    assertThat(tmp.resolve("Addon.zip")).hasBinaryContent(content);
+  }
+
+  @Test
   void theTokenReachesTheApiButNotTheHostADownloadIsRedirectedTo(@TempDir Path tmp) {
     github.release("o/private", "v1.0.0", zip("Addon-1.0.0.zip"));
     var api = new GitHubApi(Http.client(Map.of()), github.base(), Optional.of("secret"));
 
     var asset = api.releases("o/private").getFirst().assets().getFirst();
-    api.download(asset.downloadUrl(), tmp.resolve("Addon.zip"));
+    api.download(asset.downloadUrl(), tmp.resolve("Addon.zip"), done -> {});
 
     assertThat(tmp.resolve("Addon.zip")).isRegularFile();
     // The listing and the asset's API URL take the token (private repositories need it there);
