@@ -62,7 +62,9 @@ final class AddCommand implements Callable<Integer> {
   @Option(
       names = "--name",
       paramLabel = "NAME",
-      description = "Name of the entry (default: the repository name in kebab-case).")
+      description =
+          "Name of the entry (default: the well-known addon's name, else the repository name in"
+              + " kebab-case).")
   @Nullable String name;
 
   @Option(
@@ -130,9 +132,11 @@ final class AddCommand implements Callable<Integer> {
                   + config.name()
                   + "; pick another --name");
     }
-    // The user's options over the registry's, and discover() fills in what neither gives.
+    // A well-known addon's options pick one thing from its repository together (Spoken's tag
+    // prefix and zip), so the user's own --tag-prefix or --asset replaces them all rather than
+    // leaving the others to find nothing. discover() fills in what is left.
     var options = new LinkedHashMap<String, String>();
-    if (known != null) {
+    if (known != null && tagPrefix == null && asset == null) {
       options.putAll(known.options());
     }
     putIfSet(options, "tag_prefix", tagPrefix);

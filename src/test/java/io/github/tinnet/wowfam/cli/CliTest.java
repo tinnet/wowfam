@@ -550,6 +550,18 @@ final class CliTest {
         .isEqualTo(0);
     assertThat(out.toString())
         .contains("[games.test.addons.rec]", "asset = \"Polestar_Recorder-*.zip\"");
+
+    // spoken's asset belongs with its tag prefix: another prefix takes neither.
+    github.release(
+        REPO,
+        "bosses-audio/v2.1.0",
+        addonZip("SpokenBossesAudio-2.1.0.zip", "2.1.0", Map.of("SpokenBossesAudio", "")));
+    assertThat(run("add", "spoken", "--name", "bosses", "--tag-prefix", "bosses-audio/", "-n"))
+        .as(err.toString())
+        .isEqualTo(0);
+    assertThat(out.toString())
+        .contains("tag_prefix = \"bosses-audio/\"", "asset = \"SpokenBossesAudio-*.zip\"")
+        .doesNotContain("Spoken-*.zip");
   }
 
   @Test
@@ -557,7 +569,7 @@ final class CliTest {
     int requests = github.requests().size();
     assertThat(run("add", "questy")).isEqualTo(1);
     assertThat(err.toString())
-        .contains("'questy' is not a well-known addon; did you mean questie?")
+        .contains("'questy' is not a well-known addon. Did you mean questie?")
         .doesNotContain("\tat ");
     assertThat(github.requests()).hasSize(requests);
   }

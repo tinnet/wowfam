@@ -21,9 +21,10 @@ tag_prefix = "spoken/"
 asset = "Spoken-*.zip"
 ```
 
-The entry is named after the addon (`spoken`, not `spoken-wow`); `--name` changes that, and any
-other option you give (`--asset`, `--tag-prefix`, `--version`, …) wins over the list's. Names
-ignore case. A name that isn't in the list is an error that suggests close ones; for any other
+The entry is named after the addon (`spoken`, not `spoken-wow`); `--name` changes that. Giving
+`--tag-prefix` or `--asset` yourself replaces all of the list's options, since together they pick
+one thing out of the repository; to install something else from it, it is usually simpler to give
+`owner/repo`. Names ignore case. A name that isn't in the list is an error that suggests close ones; for any other
 addon give `owner/repo` or its GitHub URL.
 
 `wowfam registry` (or `wowfam registry ls`) prints the list your wowfam knows; it needs no

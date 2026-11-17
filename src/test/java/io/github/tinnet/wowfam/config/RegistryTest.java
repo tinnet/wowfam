@@ -1,8 +1,12 @@
 package io.github.tinnet.wowfam.config;
 
+import static java.util.stream.Collectors.joining;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -47,6 +51,34 @@ final class RegistryTest {
     }
   }
 
+  /** The table in docs/well-known-addons.md, which users read, lists exactly what add takes. */
+  @Test
+  void theDocsListEveryEntry() throws Exception {
+    var documented =
+        Files.readAllLines(Path.of("docs/well-known-addons.md")).stream()
+            .filter(line -> line.startsWith("| `"))
+            .map(line ->
+                Arrays.stream(line.substring(1, line.lastIndexOf('|')).split("\\|"))
+                    .map(String::strip)
+                    .collect(joining(" | "))
+                    .strip())
+            .toList();
+    var expected =
+        Registry.all().stream()
+            .map(e ->
+                "`%s` | `%s` | %s"
+                    .formatted(
+                        e.name(),
+                        e.source(),
+                        Registry.OPTIONS.stream()
+                            .filter(e.options()::containsKey)
+                            .map(k -> "`%s = \"%s\"`".formatted(k, e.options().get(k)))
+                            .collect(joining(", ")))
+                    .strip())
+            .toList();
+    assertThat(documented).containsExactlyElementsOf(expected);
+  }
+
   @Test
   void looksUpNamesIgnoringCase() {
     assertThat(Registry.lookup("Questie"))
@@ -74,9 +106,13 @@ final class RegistryTest {
     assertThat(Registry.closest("bosses")).containsExactly("spoken-bosses-audio");
     assertThatThrownBy(() -> Registry.require("questy"))
         .isInstanceOf(ConfigException.class)
-        .hasMessageContaining("'questy' is not a well-known addon; did you mean questie?")
-        .hasMessageContaining("owner/repo");
-    assertThatThrownBy(() -> Registry.require("zzzzzzzz")).hasMessageNotContaining("did you mean");
+        .hasMessage(
+            "'questy' is not a well-known addon. Did you mean questie? Give owner/repo or a"
+                + " GitHub URL for addons not in the list.");
+    assertThatThrownBy(() -> Registry.require("zzzzzzzz"))
+        .hasMessage(
+            "'zzzzzzzz' is not a well-known addon. Give owner/repo or a GitHub URL for addons not"
+                + " in the list.");
   }
 
   @Test

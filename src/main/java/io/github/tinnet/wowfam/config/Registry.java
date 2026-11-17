@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Pattern;
 
 /**
  * Well-known addons, so {@code wowfam add questie} works without the repository. An entry is what
@@ -19,9 +18,6 @@ import java.util.regex.Pattern;
  * several things or discovery could pick wrong; the rest {@code add} works out as for any source.
  */
 public final class Registry {
-
-  /** What a bare word on the command line must look like to be a registry name. */
-  private static final Pattern BARE = Pattern.compile("[A-Za-z0-9_-]+");
 
   /** The options an entry may preset, in the order they are shown. */
   public static final List<String> OPTIONS = List.of("tag_prefix", "asset", "prerelease");
@@ -72,11 +68,11 @@ public final class Registry {
   }
 
   /**
-   * Whether {@code input} can only be a registry name: a bare word, which is neither a URL, an
-   * {@code owner/repo} nor a {@code backend:reference}.
+   * Whether {@code input} can only be a registry name: a word that could name an addon, which is
+   * neither a URL, an {@code owner/repo} nor a {@code backend:reference}.
    */
   public static boolean isName(String input) {
-    return BARE.matcher(input.strip()).matches();
+    return ConfigEditor.NAME.matcher(input.strip()).matches();
   }
 
   /** The entry called {@code name}, ignoring case. */
@@ -93,10 +89,10 @@ public final class Registry {
           return new ConfigException(
               "'"
                   + name.strip()
-                  + "' is not a well-known addon"
+                  + "' is not a well-known addon."
                   + (suggestions.isEmpty()
                       ? ""
-                      : "; did you mean " + String.join(" or ", suggestions) + "?")
+                      : " Did you mean " + String.join(" or ", suggestions) + "?")
                   + " Give owner/repo or a GitHub URL for addons not in the list.");
         });
   }

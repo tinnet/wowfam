@@ -15,7 +15,7 @@ import picocli.CommandLine.Spec;
       "The well-known addons, which wowfam add takes by name (wowfam add questie).",
       "Without a subcommand, lists them."
     },
-    subcommands = RegistryCommand.ListCommand.class)
+    subcommands = RegistryCommand.RegistryListCommand.class)
 final class RegistryCommand implements Callable<Integer> {
 
   @Spec CommandSpec spec;
@@ -46,7 +46,7 @@ final class RegistryCommand implements Callable<Integer> {
       aliases = "list",
       mixinStandardHelpOptions = true,
       description = "List the well-known addons, their sources and the options add starts from.")
-  static final class ListCommand implements Callable<Integer> {
+  static final class RegistryListCommand implements Callable<Integer> {
 
     @Spec CommandSpec spec;
 
