@@ -33,6 +33,13 @@ Register a new backend in `WowfamCommand.defaultBackends`.
 `install`), otherwise the newest that does and that the backend can resolve. A release that
 resolves to nothing (no zip for this game) is passed over for the next newest.
 
+For a game, the GitHub backend leaves out releases without a `release.json` that are older than the
+repository's newest release with one: from before the addon used the packager, they can't say which
+zip is for which game. Otherwise an addon that never supported the game would fall back to a
+release from years ago (WeakAuras 3.3.0 for Forever) and install, or fail on, whatever zips it
+had. Releases without one that are newer (an addon that stopped using the packager) are still
+picked by `asset`.
+
 The GitHub backend keeps the release list of each repository for the run, so several addons from
 one repository cost one listing. A `release.json` is kept in the cache directory under the digest
 GitHub publishes for it, so each one is downloaded once, not on every run. An `asset` glob that matches several zips only fails for the

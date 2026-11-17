@@ -2,6 +2,7 @@ package io.github.tinnet.wowfam.backend.github;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Comparator.comparing;
+import static java.util.Comparator.naturalOrder;
 import static java.util.stream.Collectors.joining;
 
 import io.github.tinnet.wowfam.backend.Asset;
@@ -51,7 +52,8 @@ import tools.jackson.databind.json.JsonMapper;
  *       ({@code retail}, {@code classic_era}, {@code tbc} and the like are understood too). A
  *       release that carries the packager's {@code release.json} then installs the zip that file
  *       lists for the flavor, and is passed over if it lists none; {@code asset}, if given, still
- *       has to match. Releases without a {@code release.json} are picked by {@code asset} alone.
+ *       has to match. Releases without a {@code release.json} are picked by {@code asset} alone,
+ *       but only if they are newer than every release with one.
  *   <li>{@code interface} — like {@code flavor}, but by the {@code ## Interface} number of the game
  *       ({@code 16001}); the release.json entry for the same major and minor version matches, or
  *       else the one for the closest earlier minor version of the same major. Set from the game
@@ -125,22 +127,41 @@ public final class GitHubBackend implements Backend {
     boolean prereleases = spec.option("prerelease").filter(Boolean::parseBoolean).isPresent();
     boolean byFlavor = target(spec).isPresent();
 
-    var result = new ArrayList<Release>();
+    var offered = new LinkedHashMap<GitHubApi.GitHubRelease, Version>();
     for (var release : listed(repo)) {
       if (release.draft() || (release.prerelease() && !prereleases)) {
         continue;
       }
       var version = versionOf(release.tag(), prefix);
-      if (version.isEmpty() || (version.orElseThrow().isPrerelease() && !prereleases)) {
-        continue;
+      if (version.isPresent() && (prereleases || !version.orElseThrow().isPrerelease())) {
+        offered.put(release, version.orElseThrow());
       }
+    }
+    // For a game, a release from before the addon shipped release.json can't say which zip is for
+    // which game, and its *.zip may be any of them or one from years ago: WeakAuras 3.3.0 for
+    // retail, once its newer releases have no retail zip. Releases without one that came later
+    // (an addon that stopped using the packager) are still picked by asset.
+    var newestWithManifest =
+        offered.entrySet().stream()
+            .filter(e -> hasManifest(e.getKey()))
+            .map(Map.Entry::getValue)
+            .max(naturalOrder());
+
+    var result = new ArrayList<Release>();
+    for (var offer : offered.entrySet()) {
+      var release = offer.getKey();
+      var version = offer.getValue();
       var manifest =
           release.assets().stream().filter(a -> a.name().equals(RELEASE_JSON)).findFirst();
+      if (byFlavor
+          && manifest.isEmpty()
+          && newestWithManifest.filter(newest -> version.compareTo(newest) < 0).isPresent()) {
+        continue;
+      }
       if (byFlavor && manifest.isPresent()) {
         // Which zip is for the flavor is in release.json; resolve() reads it if this release is
         // the one chosen. Until then the release stands in with release.json as its asset.
-        result.add(
-            new Release(version.orElseThrow(), release.tag(), asset(manifest.orElseThrow())));
+        result.add(new Release(version, release.tag(), asset(manifest.orElseThrow())));
         continue;
       }
       var matching = release.assets().stream().filter(a -> assetGlob.matches(a.name())).toList();
@@ -151,9 +172,7 @@ public final class GitHubBackend implements Backend {
       // that also shipped a classic zip must not block installing a newer one.
       result.add(
           new Release(
-              version.orElseThrow(),
-              release.tag(),
-              matching.stream().map(GitHubBackend::asset).toList()));
+              version, release.tag(), matching.stream().map(GitHubBackend::asset).toList()));
     }
     result.sort(comparing(Release::version).reversed());
     return result;
@@ -344,6 +363,10 @@ public final class GitHubBackend implements Backend {
 
   private static String normalized(String text) {
     return text.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+  }
+
+  private static boolean hasManifest(GitHubApi.GitHubRelease release) {
+    return release.assets().stream().anyMatch(a -> a.name().equals(RELEASE_JSON));
   }
 
   private static boolean isZip(String name) {

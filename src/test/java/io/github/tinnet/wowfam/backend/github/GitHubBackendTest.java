@@ -222,19 +222,46 @@ final class GitHubBackendTest {
   }
 
   @Test
-  void releasesWithoutReleaseJsonAreStillPickedByAsset() {
+  void releasesFromBeforeReleaseJsonAreNotPickedForAGame() {
+    // How WeakAuras looks for retail: its packaged releases dropped the flavor, and the last
+    // release without a release.json is from years ago, with a zip per game.
     github
-        .release(REPO, "v1.0.0", zip("Addon-v1.0.0.zip"))
+        .release(
+            REPO,
+            "v1.0.0",
+            zip("Addon-v1.0.0.zip"),
+            zip("Addon-v1.0.0-classic.zip"),
+            zip("Addon-v1.0.0-bc.zip"))
+        .release(REPO, "v1.5.0", zip("Addon-v1.5.0.zip"))
         .release(
             REPO,
             "v2.0.0",
             zip("Addon-v2.0.0.zip"),
-            releaseJson(Map.of("Addon-v2.0.0.zip", List.of("mainline"))));
+            releaseJson(Map.of("Addon-v2.0.0.zip", List.of("classic"))));
+
+    assertThat(newest(Map.of("flavor", "mainline"))).isEmpty();
+    assertThat(newest(Map.of("interface", "120107"))).isEmpty();
+    assertThat(newest(Map.of("flavor", "classic")))
+        .hasValueSatisfying(r -> assertThat(r.tag()).isEqualTo("v2.0.0"));
+    // Without a game, release.json plays no part and the asset decides, as before.
+    assertThat(newest(Map.of())).hasValueSatisfying(r -> assertThat(r.tag()).isEqualTo("v2.0.0"));
+  }
+
+  @Test
+  void releasesAfterTheLastReleaseJsonAreStillPickedByAsset() {
+    // An addon that stopped using the packager: its newer releases have just a zip.
+    github
+        .release(
+            REPO,
+            "v1.0.0",
+            zip("Addon-v1.0.0.zip"),
+            releaseJson(Map.of("Addon-v1.0.0.zip", List.of("classic"))))
+        .release(REPO, "v2.0.0", zip("Addon-v2.0.0.zip"));
 
     assertThat(newest(Map.of("flavor", "classic")))
         .hasValueSatisfying(r -> {
-          assertThat(r.tag()).isEqualTo("v1.0.0");
-          assertThat(r.asset().name()).isEqualTo("Addon-v1.0.0.zip");
+          assertThat(r.tag()).isEqualTo("v2.0.0");
+          assertThat(r.asset().name()).isEqualTo("Addon-v2.0.0.zip");
         });
   }
 
