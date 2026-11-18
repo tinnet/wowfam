@@ -2,6 +2,21 @@
 
 What changed in each wowfam release. Versions are dates (CalVer).
 
+## 2026.11.18
+
+### Features
+
+- **cli**: Show install progress in place, with each download, in a terminal ([ef511fa](https://github.com/tinnet/wowfam/commit/ef511faf7e1606ec3bed9461b433fa7071fdbef9))
+
+### Performance
+
+- **install**: Stop reading all of QuestieDB's database after every run ([60b8cac](https://github.com/tinnet/wowfam/commit/60b8cac677c1298e48cd020a1b222538890d0590))
+
+### Documentation
+
+- Explain where WoW addons come from, and answer why wowfam is GitHub only ([d4eeb94](https://github.com/tinnet/wowfam/commit/d4eeb945df198c359def12e8d6b196338349686d))
+- Say who pays for WoWInterface, GitHub and WowUp downloads ([05d139e](https://github.com/tinnet/wowfam/commit/05d139ee9c9046da1ff6d5a2f490da6044b92a36))
+
 ## 2026.11.17
 
 ### Features
