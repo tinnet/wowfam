@@ -30,8 +30,9 @@ flowchart LR
 
 ## The apps
 
-Each site has an app of its own, and [WowUp](https://wowup.io) is the open-source app that tries
-to install from all of them.
+Each site has an app of its own. [WowUp](https://wowup.io) is the open-source app that tries to
+install from all of them, and [instawow](https://github.com/layday/instawow) is a command-line
+manager that can too, if you bring your own keys.
 
 - **CurseForge app** (Overwolf): installs from CurseForge. It first ran inside Overwolf; a
   standalone build followed in 2022, with a
@@ -44,6 +45,9 @@ to install from all of them.
 - **WowUp**: open source (GPL-3.0), free, funded by
   [Patreon](https://www.patreon.com/jliddev). It ships as **two editions built from one
   codebase**, because CurseForge and Wago each set conditions the other's edition can't meet.
+- **instawow**: open source (GPL-3.0-or-later), a command-line manager in Python. It ships no
+  keys: CurseForge and Wago work only with a key the user supplies (see
+  [below](#instawow-brings-no-keys)).
 
 ```mermaid
 flowchart LR
@@ -54,6 +58,7 @@ flowchart LR
   end
   wagoapp[Wago app]
   minion[Minion]
+  instawow[instawow]
   wowfam[wowfam]
   cfapi[(CurseForge API<br/>key required)]
   wagoapi[(Wago API)]
@@ -66,6 +71,10 @@ flowchart LR
   minion --> mmoui
   wowup --> mmoui
   wowup --> ghapi
+  instawow -- "the user's<br/>own key" --> cfapi
+  instawow -- "the user's<br/>Wago access key" --> wagoapi
+  instawow --> mmoui
+  instawow --> ghapi
   wowfam --> ghapi
 ```
 
@@ -90,6 +99,29 @@ Both editions show ads, and both say why in the app
 favorite addons we are required to show this advertisement", and the same sentence for CurseForge.
 The Wago edition hides its ads for anyone with a Wago access key, which comes with
 [Wago's Patreon](https://addons.wago.io/patreon).
+
+### instawow brings no keys
+
+instawow's
+[README](https://github.com/layday/instawow/blob/4d0d5dfc9de47046f4c6600043d431fde900a76b/README.rst#curseforge)
+calls the keyed CurseForge API "unworkable for add-on managers except through a proxy service,
+which the author of this particular add-on manager cannot afford". So instead of shipping a key, it
+leaves the key to the user. The code (at commit `4d0d5df`, November 2026) shows how:
+
+- The CurseForge source
+  ([`cfcore.py`](https://github.com/layday/instawow/blob/4d0d5dfc9de47046f4c6600043d431fde900a76b/src/instawow/_sources/cfcore.py))
+  sends the user's own key from `access_tokens.cfcore` as `x-api-key`, and fails without one. The
+  only other way is to set `INSTAWOW_CF_API_URL` to a proxy, which then needs no key; instawow
+  doesn't provide a proxy.
+- The Wago source
+  ([`wago_addons.py`](https://github.com/layday/instawow/blob/4d0d5dfc9de47046f4c6600043d431fde900a76b/src/instawow/_sources/wago_addons.py))
+  requires a token in `access_tokens.wago_addons`, in practice a Wago access key. It has no
+  ad-supported path.
+- The WoWInterface source
+  ([`wowi.py`](https://github.com/layday/instawow/blob/4d0d5dfc9de47046f4c6600043d431fde900a76b/src/instawow/_sources/wowi.py))
+  reads the same undocumented `api.mmoui.com` endpoints as WowUp, without a key.
+- GitHub and TukUI use their public APIs; a GitHub token is optional and only raises the rate
+  limit.
 
 ## How it got this way
 
@@ -184,6 +216,11 @@ without asking WoWInterface first, and would take authentication if they want it
 - WowUp: [wowup.io](https://wowup.io), [GitHub](https://github.com/WowUp/WowUp),
   [ad texts](https://github.com/WowUp/WowUp/blob/master/wowup-electron/src/assets/i18n/en.json),
   [WoWInterface provider](https://github.com/WowUp/WowUp/blob/master/wowup-lib/src/addon-providers/wow-interface-addon-provider.ts)
+- instawow (at `4d0d5df`):
+  [README on CurseForge](https://github.com/layday/instawow/blob/4d0d5dfc9de47046f4c6600043d431fde900a76b/README.rst#curseforge),
+  [CurseForge source](https://github.com/layday/instawow/blob/4d0d5dfc9de47046f4c6600043d431fde900a76b/src/instawow/_sources/cfcore.py),
+  [Wago source](https://github.com/layday/instawow/blob/4d0d5dfc9de47046f4c6600043d431fde900a76b/src/instawow/_sources/wago_addons.py),
+  [WoWInterface source](https://github.com/layday/instawow/blob/4d0d5dfc9de47046f4c6600043d431fde900a76b/src/instawow/_sources/wowi.py)
 - Wowhead:
   [The End of Ajour](https://www.wowhead.com/news/the-end-of-ajour-overwolf-announces-new-api-roadmap-to-restrict-third-party-324892)
   (2021-11-14),
