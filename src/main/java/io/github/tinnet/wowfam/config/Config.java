@@ -53,9 +53,14 @@ public record Config(
     return addons.containsKey(addon) || external.containsKey(addon);
   }
 
-  /** The external entry that lists {@code folder}, if any. */
+  /**
+   * The external entry that lists {@code folder}, if any. Case is ignored: on Windows and macOS
+   * {@code elvui} is the folder {@code ElvUI}.
+   */
   public Optional<ExternalAddon> externalOwner(String folder) {
-    return external.values().stream().filter(e -> e.folders().contains(folder)).findFirst();
+    return external.values().stream()
+        .filter(e -> e.folders().stream().anyMatch(folder::equalsIgnoreCase))
+        .findFirst();
   }
 
   /** The global hooks followed by the addon's own. */

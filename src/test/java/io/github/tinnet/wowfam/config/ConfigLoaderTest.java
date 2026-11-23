@@ -253,6 +253,7 @@ final class ConfigLoaderTest {
                     "elvui", Optional.of("tukui"), List.of("ElvUI", "ElvUI_Options"))),
             Map.entry("mine", new ExternalAddon("mine", Optional.empty(), List.of("MyStuff"))));
     assertThat(config.externalOwner("ElvUI_Options")).map(ExternalAddon::name).hasValue("elvui");
+    assertThat(config.externalOwner("elvui_options")).map(ExternalAddon::name).hasValue("elvui");
     assertThat(config.installOrder(List.of()))
         .extracting(AddonSpec::name)
         .containsExactly("elvui-plugin");
@@ -286,7 +287,7 @@ final class ConfigLoaderTest {
                 """))
         .isInstanceOf(ConfigException.class)
         .hasMessageContaining("is external, so it takes only external and folders, not source");
-    for (var folder : List.of("..", "a/b", "a\\\\b", "")) {
+    for (var folder : List.of("..", ".hidden", "a/b", "a\\\\b", "")) {
       assertThatThrownBy(
               () -> game("[games.g.addons.a]\nexternal = true\nfolders = [\"" + folder + "\"]\n"))
           .as(folder)
@@ -302,10 +303,10 @@ final class ConfigLoaderTest {
 
                 [games.g.addons.b]
                 external = "WowUp"
-                folders = ["B", "Shared"]
+                folders = ["B", "shared"]
                 """))
         .isInstanceOf(ConfigException.class)
-        .hasMessageContaining("games.g.addons.a and b both list folder Shared");
+        .hasMessageContaining("games.g.addons.a and b both list folder shared");
   }
 
   @Test

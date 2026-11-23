@@ -127,7 +127,7 @@ final class Reports {
                           o.addon(),
                           o.version(),
                           o.folders().isEmpty()
-                              ? "its folders belong to another addon now"
+                              ? "its folders stay: another entry has them"
                               : folders);
               case UP_TO_DATE -> null;
             })

@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -142,11 +143,14 @@ public final class Installer {
       // A run over the whole file makes AddOns match it: an addon that was renamed or taken out
       // of wowfam.toml by hand is uninstalled.
       for (var name : List.copyOf(lock.entries().keySet())) {
-        if (!config.addons().containsKey(name)) {
-          progress.log(
-              config.external().containsKey(name)
-                  ? "handing " + name + " over: it is external now, so its folders stay"
-                  : "uninstalling " + name + ", which is no longer in game " + config.name());
+        if (config.external().containsKey(name)) {
+          // Handed over to another manager: every folder wowfam installed stays, listed or not,
+          // since the other manager may keep folders the external entry doesn't name.
+          progress.log("handing " + name + " over: it is external now, so its folders stay");
+          lock.remove(name);
+          lock.write();
+        } else if (!config.addons().containsKey(name)) {
+          progress.log("uninstalling " + name + ", which is no longer in game " + config.name());
           try {
             var outcome = uninstall(settings.addonsDir(), lock, name, externalFolders(config));
             outcomes.add(outcome);
@@ -170,9 +174,9 @@ public final class Installer {
     return new Report(outcomes, missingDependencies(settings.addonsDir(), lock), missingExternal);
   }
 
-  /** The folders the external entries of {@code config} list. */
+  /** The folders the external entries of {@code config} list, ignoring case. */
   public static Set<String> externalFolders(Config config) {
-    var folders = new LinkedHashSet<String>();
+    var folders = new TreeSet<String>(String.CASE_INSENSITIVE_ORDER);
     config.external().values().forEach(e -> folders.addAll(e.folders()));
     return folders;
   }
@@ -450,7 +454,10 @@ public final class Installer {
       var stale = new LinkedHashSet<>(previousFolders);
       stale.removeAll(folders);
       for (var folder : stale) {
-        deleteRecursively(addonsDir.resolve(folder));
+        // A folder an external entry lists is someone else's now, even if this addon had it.
+        if (config.externalOwner(folder).isEmpty()) {
+          deleteRecursively(addonsDir.resolve(folder));
+        }
       }
       for (var folder : folders) {
         var target = addonsDir.resolve(folder);

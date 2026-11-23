@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -238,7 +239,7 @@ public final class ConfigLoader {
     var claimed = new LinkedHashMap<String, String>();
     for (var e : external.values()) {
       for (var folder : e.folders()) {
-        var other = claimed.putIfAbsent(folder, e.name());
+        var other = claimed.putIfAbsent(folder.toLowerCase(Locale.ROOT), e.name());
         if (other != null) {
           throw new ConfigException(
               where
@@ -314,11 +315,13 @@ public final class ConfigLoader {
     return new ExternalAddon(name, manager, folders);
   }
 
-  /** A folder directly in AddOns: no separators, nothing that leaves the folder. */
+  /**
+   * An addon folder directly in AddOns: no separators, nothing that leaves the folder, and not
+   * hidden (WoW doesn't load those, and wowfam stages installs in them).
+   */
   public static boolean isFolderName(String name) {
     return !name.isBlank()
-        && !name.equals(".")
-        && !name.equals("..")
+        && !name.startsWith(".")
         && name.chars().noneMatch(c -> c == '/' || c == '\\' || c == ':' || c < 0x20);
   }
 

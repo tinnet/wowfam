@@ -22,8 +22,12 @@ final class ExternalCommandTest {
             "DBM-Core_Options",
             "DBM-StatusBarTimers",
             "Details",
+            "Atlas",
+            "AtlasLoot",
             "ElvUI",
             "ElvUI_Options",
+            "Leatrix_Maps",
+            "Leatrix_Plus",
             "WeakAuras",
             "WeakAurasOptions");
 
@@ -32,7 +36,11 @@ final class ExternalCommandTest {
             Map.entry("BigWigs", List.of("BigWigs", "BigWigs_Core", "BigWigs_Plugins")),
             Map.entry("DBM", List.of("DBM-Core", "DBM-Core_Options", "DBM-StatusBarTimers")),
             Map.entry("Details", List.of("Details")),
+            Map.entry("Atlas", List.of("Atlas")),
+            Map.entry("AtlasLoot", List.of("AtlasLoot")),
             Map.entry("ElvUI", List.of("ElvUI", "ElvUI_Options")),
+            // Separate addons by one author: grouped all the same, and pointed out by --all.
+            Map.entry("Leatrix", List.of("Leatrix_Maps", "Leatrix_Plus")),
             Map.entry("WeakAuras", List.of("WeakAuras", "WeakAurasOptions")));
   }
 

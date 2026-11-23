@@ -148,9 +148,11 @@ folders = ["ElvUI", "ElvUI_Options"]
 $ wowfam external --all          # every folder wowfam.toml doesn't account for
 ```
 
-`--all` makes one entry per addon: a folder goes with the folder its name starts with
-(`ElvUI_Options` with `ElvUI`), else with those sharing the part before the first `-` or `_`
-(`DBM-Core`, `DBM-StatusBarTimers`). The entries are an editable guess; `-n` prints them first.
+`--all` makes one entry per addon: a folder goes with the folder its name starts with, followed by
+`_`, `-` or a part such as `Options` (`ElvUI_Options` and `WeakAurasOptions`, not `AtlasLoot`
+with `Atlas`), else with those sharing the part before the first `-` or `_` (`DBM-Core`,
+`DBM-StatusBarTimers`). It points out groups made by name alone, which may be separate addons by one
+author. The entries are an editable guess; `-n` prints them first.
 The entry's name is the first folder in kebab-case unless `--name` gives one.
 
 wowfam never installs, updates or deletes an external addon's folders. Having it in `wowfam.toml`

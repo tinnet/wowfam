@@ -39,6 +39,22 @@ import picocli.CommandLine.Spec;
     })
 final class ExternalCommand implements Callable<Integer> {
 
+  /** Names of the parts an addon ships beside its main folder, as in {@code WeakAurasOptions}. */
+  private static final List<String> PARTS =
+      List.of(
+          "Archive",
+          "Config",
+          "Configurator",
+          "Data",
+          "Libraries",
+          "Libs",
+          "Locale",
+          "ModelPaths",
+          "Options",
+          "Plugins",
+          "Settings",
+          "Templates");
+
   @ParentCommand WowfamCommand root;
 
   @Spec CommandSpec spec;
@@ -95,7 +111,16 @@ final class ExternalCommand implements Callable<Integer> {
       var taken = new HashSet<String>(config.addons().keySet());
       taken.addAll(config.external().keySet());
       entries = new ArrayList<>();
+      var err = spec.commandLine().getErr();
       for (var group : groups(unclaimed).entrySet()) {
+        if (group.getValue().size() > 1 && !group.getValue().contains(group.getKey())) {
+          // Grouped by a shared name alone (DBM-*, but also Leatrix_Plus and Leatrix_Maps): a
+          // guess worth pointing out.
+          err.printf(
+              "note: %s are grouped as one addon by their names; split the entry if they are"
+                  + " separate addons%n",
+              String.join(", ", group.getValue()));
+        }
         var base = AddCommand.kebabCase(group.getKey());
         var entryName = base.isEmpty() ? "addon" : base;
         for (int n = 2; taken.contains(entryName); n++) {
@@ -105,10 +130,9 @@ final class ExternalCommand implements Callable<Integer> {
         entries.add(new ExternalAddon(entryName, manager, group.getValue()));
       }
     } else {
-      var wanted = List.copyOf(new LinkedHashSet<>(folders));
-      for (var folder : wanted) {
-        check(config, lock, folder);
-      }
+      var wanted =
+          List.copyOf(
+              new LinkedHashSet<>(folders.stream().map(f -> check(config, lock, f)).toList()));
       var entryName = name != null ? name : AddCommand.kebabCase(wanted.getFirst());
       if (!ConfigEditor.NAME.matcher(entryName).matches()) {
         throw new ConfigException(
@@ -141,12 +165,22 @@ final class ExternalCommand implements Callable<Integer> {
     return 0;
   }
 
-  /** Refuses a folder that isn't in AddOns or that an entry already accounts for. */
-  private static void check(Config config, LockFile lock, String folder) {
+  /**
+   * The folder as AddOns spells it (on Windows and macOS {@code elvui} finds {@code ElvUI}), or an
+   * error if it isn't there or an entry already accounts for it.
+   */
+  private static String check(Config config, LockFile lock, String given) {
     var addonsDir = config.settings().addonsDir();
-    if (!ConfigLoader.isFolderName(folder) || !Files.isDirectory(addonsDir.resolve(folder))) {
-      throw new ConfigException("there is no folder " + folder + " in " + addonsDir);
-    }
+    var present =
+        ConfigLoader.isFolderName(given) ? AddOnsFolder.folders(addonsDir) : List.<String>of();
+    var folder =
+        present.contains(given)
+            ? given
+            : present.stream()
+                .filter(given::equalsIgnoreCase)
+                .findFirst()
+                .orElseThrow(() ->
+                    new ConfigException("there is no addon folder " + given + " in " + addonsDir));
     var external = config.externalOwner(folder);
     if (external.isPresent()) {
       throw new ConfigException(
@@ -163,14 +197,16 @@ final class ExternalCommand implements Callable<Integer> {
               + ", which wowfam manages; to hand it over, replace that entry's source and options"
               + " with external = true and its folders");
     }
+    return folder;
   }
 
   /**
    * The folders grouped into addons, by the name of each group: a folder goes with the shortest
-   * other folder its name starts with ({@code ElvUI_Options} with {@code ElvUI}, {@code
-   * WeakAurasOptions} with {@code WeakAuras}), else with the folders that share the part of its
-   * name before the first {@code -} or {@code _} ({@code DBM-Core} and {@code DBM-StatusBarTimers}
-   * as {@code DBM}). Groups and their folders keep the order of {@code folders}.
+   * other folder its name starts with, followed by a separator or a usual part's name ({@code
+   * ElvUI_Options} with {@code ElvUI}, {@code WeakAurasOptions} with {@code WeakAuras}, but not
+   * {@code AtlasLoot} with {@code Atlas}), else with the folders that share the part of its name
+   * before the first {@code -} or {@code _} ({@code DBM-Core} and {@code DBM-StatusBarTimers} as
+   * {@code DBM}). Groups and their folders keep the order of {@code folders}.
    */
   static Map<String, List<String>> groups(List<String> folders) {
     var keys = new LinkedHashMap<String, String>();
@@ -189,11 +225,23 @@ final class ExternalCommand implements Callable<Integer> {
     }
     var prefix =
         folders.stream()
-            .filter(other -> other.length() < folder.length() && folder.startsWith(other))
+            .filter(other -> other.length() < folder.length() && isPartOf(folder, other))
             .min(comparingInt(String::length));
     var key = prefix.isPresent() ? key(prefix.orElseThrow(), folders, keys) : stem(folder);
     keys.put(folder, key);
     return key;
+  }
+
+  /** Whether {@code folder} is {@code main} followed by a separator or a usual part's name. */
+  private static boolean isPartOf(String folder, String main) {
+    if (!folder.startsWith(main)) {
+      return false;
+    }
+    var rest = folder.substring(main.length());
+    return rest.startsWith("_")
+        || rest.startsWith("-")
+        || rest.startsWith(".")
+        || PARTS.stream().anyMatch(rest::equalsIgnoreCase);
   }
 
   /** The part of {@code folder} before its first {@code -} or {@code _}, or all of it. */

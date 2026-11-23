@@ -790,7 +790,10 @@ final class CliTest {
     assertThat(run("external", "Spoken")).isEqualTo(1);
     assertThat(err.toString()).contains("Spoken belongs to spoken, which wowfam manages");
     assertThat(run("external", "Nope")).isEqualTo(1);
-    assertThat(err.toString()).contains("there is no folder Nope in");
+    assertThat(err.toString()).contains("there is no addon folder Nope in");
+    Files.createDirectories(addons.resolve(".wowfam-staging-x"));
+    assertThat(run("external", ".wowfam-staging-x")).isEqualTo(1);
+    assertThat(err.toString()).contains("there is no addon folder .wowfam-staging-x in");
     assertThat(run("external", "--all", "ElvUI")).isEqualTo(1);
     assertThat(err.toString()).contains("give the folders of one addon, or --all");
 
@@ -807,6 +810,11 @@ final class CliTest {
             external = true
             folders = ["MyThing"]
             """);
+    assertThat(err.toString())
+        .contains(
+            "note: DBM-Core, DBM-StatusBarTimers are grouped as one addon by their names; split"
+                + " the entry if they are separate addons")
+        .doesNotContain("ElvUI");
     assertThat(config).content().isEqualTo(before);
     assertThat(run("external", "--all")).as(err.toString()).isEqualTo(0);
     assertThat(config)
@@ -886,25 +894,90 @@ final class CliTest {
   }
 
   @Test
-  void aManagedAddonMadeExternalKeepsItsFolders() throws Exception {
+  void aManagedAddonMadeExternalKeepsAllItsFolders() throws Exception {
     assertThat(run("install")).as(err.toString()).isEqualTo(0);
-    var full = Files.readString(config);
+    // The external entry names only the main folder; the others the release had stay too, since
+    // the other manager may keep them.
     Files.writeString(
         config,
-        full.substring(0, full.indexOf("[games.test.addons.spoken-readables-audio]"))
-            + """
-            [games.test.addons.spoken-readables-audio]
-            external = true
-            folders = ["SpokenReadablesAudio"]
-            """);
+        Files.readString(config)
+            .replace(
+                """
+                source = "github:rusty-key/spoken-wow"
+                tag_prefix = "spoken/"
+                asset = "Spoken-*.zip"
+                """,
+                """
+                external = "WowUp"
+                folders = ["Spoken"]
+                """));
 
     assertThat(run("install")).as(err.toString()).isEqualTo(0);
 
     assertThat(out.toString())
-        .contains("handing spoken-readables-audio over: it is external now, so its folders stay");
-    assertThat(addons.resolve("SpokenReadablesAudio")).isDirectory();
+        .contains("handing spoken over: it is external now, so its folders stay")
+        .doesNotContain("- spoken");
+    for (var folder :
+        List.of(
+            "Spoken", "SpokenContributions", "Spoken_Quests", "Spoken_Readables", "SpokenQuests")) {
+      assertThat(addons.resolve(folder)).isDirectory();
+    }
     assertThat(LockFile.read(tmp.resolve("wowfam.lock"), "test").entries())
-        .containsOnlyKeys("spoken");
+        .containsOnlyKeys("spoken-readables-audio");
+  }
+
+  @Test
+  void anUpdateLeavesAFolderAnExternalEntryListsThoughTheOldReleaseHadIt() throws Exception {
+    assertThat(run("install", "spoken")).as(err.toString()).isEqualTo(0);
+    Files.writeString(
+        config,
+        Files.readString(config)
+            + """
+
+            [games.test.addons.legacy]
+            external = true
+            folders = ["spokenquests"]
+            """);
+    github.release(REPO, "spoken/v3.8.5", spoken("3.8.5", false));
+
+    assertThat(run("update", "spoken")).as(err.toString()).isEqualTo(0);
+
+    assertThat(addons.resolve("Spoken/Spoken.toc")).content().contains("3.8.5");
+    assertThat(addons.resolve("SpokenQuests")).isDirectory();
+  }
+
+  @Test
+  void anExternalEntryProtectsItsFoldersWhateverTheirCase() throws Exception {
+    Files.writeString(
+        config,
+        Files.readString(config)
+            + """
+
+            [games.test.addons.by-hand]
+            external = true
+            folders = ["spokenreadablesaudio"]
+            """);
+
+    assertThat(run("install", "spoken-readables-audio")).isEqualTo(1);
+    assertThat(err.toString())
+        .contains(
+            "wants to install folder SpokenReadablesAudio, which is in the external entry by-hand");
+  }
+
+  @DisabledOnOs(OS.WINDOWS)
+  @Test
+  void listStillShowsTheAddonsWhenAddOnsCannotBeRead() throws Exception {
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+    Files.setPosixFilePermissions(
+        addons, java.nio.file.attribute.PosixFilePermissions.fromString("-wx------"));
+    try {
+      assertThat(run("list")).as(err.toString()).isEqualTo(0);
+      assertThat(out.toString()).containsPattern("spoken\\s+latest\\s+3.8.4");
+      assertThat(err.toString()).contains("warning: cannot list");
+    } finally {
+      Files.setPosixFilePermissions(
+          addons, java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
+    }
   }
 
   @Test
@@ -929,7 +1002,7 @@ final class CliTest {
     assertThat(LockFile.read(tmp.resolve("wowfam.lock"), "test").entries())
         .containsOnlyKeys("player", "spoken-readables-audio");
     assertThat(out.toString())
-        .contains("✓ player 3.8.4", "- spoken 3.8.4  (its folders belong to another addon now)");
+        .contains("✓ player 3.8.4", "- spoken 3.8.4  (its folders stay: another entry has them)");
     assertThat(addons.resolve("Spoken/Spoken.toc")).exists();
   }
 

@@ -1,8 +1,10 @@
 package io.github.tinnet.wowfam.cli;
 
+import io.github.tinnet.wowfam.config.ConfigException;
 import io.github.tinnet.wowfam.lock.LockEntry;
 import io.github.tinnet.wowfam.lock.LockFile;
 import java.nio.file.Files;
+import java.util.List;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -56,7 +58,14 @@ final class ListCommand implements Callable<Integer> {
         table.row(external.name(), "-", present, external.describe());
       }
       table.print(out);
-      var unclaimed = AddOnsFolder.unclaimed(config, lock);
+      List<String> unclaimed;
+      try {
+        unclaimed = AddOnsFolder.unclaimed(config, lock);
+      } catch (ConfigException e) {
+        // Only a hint: the table above is what list is for.
+        spec.commandLine().getErr().println("warning: " + e.getMessage());
+        unclaimed = List.of();
+      }
       if (!unclaimed.isEmpty()) {
         out.printf(
             "not in wowfam.toml: %s%n(wowfam external --all%s records them as kept by something"
