@@ -194,6 +194,18 @@ final class LockFileTest {
   }
 
   @Test
+  void aByteOrderMarkInAValueRoundTrips() {
+    var entry =
+        new LockEntry(
+            "github:o/r", "1\uFEFF", "v1", "a.zip", "u", Optional.empty(), List.of("\uFEFFA"));
+    var lock = LockFile.parse(Path.of("wowfam.lock"), "g", "");
+    lock.put("a", entry);
+
+    assertThat(lock.toToml()).doesNotContain("\uFEFF");
+    assertThat(LockFile.parse(Path.of("wowfam.lock"), "g", lock.toToml()).get("a")).hasValue(entry);
+  }
+
+  @Test
   void eachGameKeepsItsOwnEntries(@TempDir Path tmp) {
     var path = tmp.resolve("wowfam.lock");
     var entry =

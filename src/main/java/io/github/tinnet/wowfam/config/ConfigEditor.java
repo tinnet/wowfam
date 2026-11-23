@@ -375,7 +375,8 @@ public final class ConfigEditor {
         case '\t' -> out.append("\\t");
         case '\r' -> out.append("\\r");
         default -> {
-          if (c < 0x20 || c == 0x7f) {
+          // The TOML parser takes a byte order mark anywhere but the start for a stray one.
+          if (c < 0x20 || c == 0x7f || c == '\uFEFF') {
             out.append("\\u%04x".formatted((int) c));
           } else {
             out.append(c);

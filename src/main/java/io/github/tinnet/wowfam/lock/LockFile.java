@@ -226,7 +226,8 @@ public final class LockFile {
         case '\t' -> sb.append("\\t");
         case '\r' -> sb.append("\\r");
         default -> {
-          if (c < 0x20 || c == 0x7f) {
+          // The TOML parser takes a byte order mark anywhere but the start for a stray one.
+          if (c < 0x20 || c == 0x7f || c == '\uFEFF') {
             sb.append("\\u%04X".formatted((int) c));
           } else {
             sb.append(c);
