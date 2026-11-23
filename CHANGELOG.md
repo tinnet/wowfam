@@ -2,6 +2,16 @@
 
 What changed in each wowfam release. Versions are dates (CalVer).
 
+## 2026.11.23.1
+
+### Features
+
+- **cli**: Leave addons linked into AddOns alone ([bc63c99](https://github.com/tinnet/wowfam/commit/bc63c997e97d8ff3947250fcbbfc8de17498e1d3))
+
+### Fixes
+
+- **cli**: Print wowfam external -n's entries, and name a lone folder after itself ([f24c99c](https://github.com/tinnet/wowfam/commit/f24c99c92781effbe90757cc81a27a1819f8caaa))
+
 ## 2026.11.23
 
 ### Features
