@@ -981,6 +981,17 @@ final class CliTest {
   }
 
   @Test
+  void externalAllNamesAFolderOfItsOwnAfterItself() throws Exception {
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+    // Its stem is that of the managed Spoken, whose name it must not borrow (as spoken-2).
+    Files.createDirectories(addons.resolve("Spoken_Extra"));
+
+    assertThat(run("external", "--all", "-n")).as(err.toString()).isEqualTo(0);
+
+    assertThat(out.toString()).startsWith("[games.test.addons.spoken-extra]\n");
+  }
+
+  @Test
   void removeTakesOutAnEntryThatWasNeverInstalled() throws Exception {
     assertThat(run("install", "spoken")).as(err.toString()).isEqualTo(0);
     assertThat(run("remove", "spoken-readables-audio")).as(err.toString()).isEqualTo(0);

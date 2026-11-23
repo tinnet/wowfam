@@ -8,7 +8,12 @@ public final class Main {
   private Main() {}
 
   public static void main(String[] args) {
-    System.exit(WowfamCommand.newCommandLine().execute(args));
+    var commandLine = WowfamCommand.newCommandLine();
+    int status = commandLine.execute(args);
+    // The writers flush on println alone; a print without a line end would be lost at exit.
+    commandLine.getOut().flush();
+    commandLine.getErr().flush();
+    System.exit(status);
   }
 
   /** Entry point for tests: runs the CLI without exiting the JVM. */

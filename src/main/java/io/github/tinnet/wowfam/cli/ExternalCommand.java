@@ -121,7 +121,10 @@ final class ExternalCommand implements Callable<Integer> {
                   + " separate addons%n",
               String.join(", ", group.getValue()));
         }
-        var base = AddCommand.kebabCase(group.getKey());
+        // One folder is named after itself: Polestar_Recorder, not polestar.
+        var base =
+            AddCommand.kebabCase(
+                group.getValue().size() == 1 ? group.getValue().getFirst() : group.getKey());
         var entryName = base.isEmpty() ? "addon" : base;
         for (int n = 2; taken.contains(entryName); n++) {
           entryName = (base.isEmpty() ? "addon" : base) + "-" + n;
