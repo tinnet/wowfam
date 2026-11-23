@@ -227,6 +227,88 @@ final class ConfigLoaderTest {
   }
 
   @Test
+  void readsExternalAddonsWhichOthersMayDependOn() {
+    var config =
+        game(
+            """
+            [games.g.addons.elvui]
+            external = "tukui"
+            folders = ["ElvUI", "ElvUI_Options", "ElvUI"]
+
+            [games.g.addons.mine]
+            external = true
+            folders = ["MyStuff"]
+
+            [games.g.addons.elvui-plugin]
+            source = "github:o/plugin"
+            depends = ["elvui"]
+            """);
+
+    assertThat(config.addons()).containsOnlyKeys("elvui-plugin");
+    assertThat(config.external())
+        .containsExactly(
+            Map.entry(
+                "elvui",
+                new ExternalAddon(
+                    "elvui", Optional.of("tukui"), List.of("ElvUI", "ElvUI_Options"))),
+            Map.entry("mine", new ExternalAddon("mine", Optional.empty(), List.of("MyStuff"))));
+    assertThat(config.externalOwner("ElvUI_Options")).map(ExternalAddon::name).hasValue("elvui");
+    assertThat(config.installOrder(List.of()))
+        .extracting(AddonSpec::name)
+        .containsExactly("elvui-plugin");
+    assertThat(config.externalDependencies(List.of("elvui-plugin")))
+        .extracting(ExternalAddon::name)
+        .containsExactly("elvui");
+    assertThat(config.externalDependencies(List.of()))
+        .extracting(ExternalAddon::name)
+        .containsExactly("elvui", "mine");
+    assertThatThrownBy(() -> config.installOrder(List.of("elvui")))
+        .isInstanceOf(ConfigException.class)
+        .hasMessageContaining("elvui is external (tukui) in game g")
+        .hasMessageContaining("wowfam does not install or update it");
+  }
+
+  @Test
+  void rejectsExternalAddonsThatSayTooLittleOrTooMuch() {
+    assertThatThrownBy(() -> game("[games.g.addons.a]\nexternal = true\n"))
+        .isInstanceOf(ConfigException.class)
+        .hasMessageContaining("games.g.addons.a needs folders");
+    assertThatThrownBy(() -> game("[games.g.addons.a]\nexternal = false\nfolders = [\"A\"]\n"))
+        .isInstanceOf(ConfigException.class)
+        .hasMessageContaining("external must be true or who manages the addon");
+    assertThatThrownBy(() ->
+            game(
+                """
+                [games.g.addons.a]
+                external = true
+                folders = ["A"]
+                source = "github:o/r"
+                """))
+        .isInstanceOf(ConfigException.class)
+        .hasMessageContaining("is external, so it takes only external and folders, not source");
+    for (var folder : List.of("..", "a/b", "a\\\\b", "")) {
+      assertThatThrownBy(
+              () -> game("[games.g.addons.a]\nexternal = true\nfolders = [\"" + folder + "\"]\n"))
+          .as(folder)
+          .isInstanceOf(ConfigException.class)
+          .hasMessageContaining("must list folder names in AddOns");
+    }
+    assertThatThrownBy(() ->
+            game(
+                """
+                [games.g.addons.a]
+                external = true
+                folders = ["Shared"]
+
+                [games.g.addons.b]
+                external = "WowUp"
+                folders = ["B", "Shared"]
+                """))
+        .isInstanceOf(ConfigException.class)
+        .hasMessageContaining("games.g.addons.a and b both list folder Shared");
+  }
+
+  @Test
   void rejectsInvalidToml() {
     assertThatThrownBy(() -> loader.parse(FILE, "[games.a\n"))
         .isInstanceOf(ConfigException.class)

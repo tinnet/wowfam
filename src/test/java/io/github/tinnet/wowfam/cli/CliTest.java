@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.tinnet.wowfam.FakeGitHub;
 import io.github.tinnet.wowfam.WowInstall;
+import io.github.tinnet.wowfam.config.AddonSpec;
 import io.github.tinnet.wowfam.config.ConfigLoader;
 import io.github.tinnet.wowfam.config.Registry;
 import io.github.tinnet.wowfam.config.Source;
@@ -755,6 +756,155 @@ final class CliTest {
 
     assertThat(run("remove", "spoken-readables-audio")).isEqualTo(1);
     assertThat(err.toString()).contains("no addon named 'spoken-readables-audio'");
+  }
+
+  @Test
+  void externalAddonsAreRecordedListedAndLeftAlone() throws Exception {
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+    for (var folder :
+        List.of("ElvUI", "ElvUI_Options", "DBM-Core", "DBM-StatusBarTimers", "MyThing")) {
+      Files.createDirectories(addons.resolve(folder));
+      Files.writeString(addons.resolve(folder).resolve(folder + ".toc"), "## Title: x\n");
+    }
+
+    assertThat(run("list")).isEqualTo(0);
+    assertThat(out.toString())
+        .contains(
+            "not in wowfam.toml: DBM-Core, DBM-StatusBarTimers, ElvUI, ElvUI_Options, MyThing",
+            "(wowfam external --all records them");
+
+    assertThat(run("external", "ElvUI", "ElvUI_Options", "--by", "tukui"))
+        .as(err.toString())
+        .isEqualTo(0);
+    assertThat(config)
+        .content()
+        .endsWith(
+            """
+            [games.test.addons.elv-ui]
+            external = "tukui"
+            folders = ["ElvUI", "ElvUI_Options"]
+            """);
+
+    assertThat(run("external", "ElvUI_Options")).isEqualTo(1);
+    assertThat(err.toString()).contains("ElvUI_Options is in the external entry elv-ui already");
+    assertThat(run("external", "Spoken")).isEqualTo(1);
+    assertThat(err.toString()).contains("Spoken belongs to spoken, which wowfam manages");
+    assertThat(run("external", "Nope")).isEqualTo(1);
+    assertThat(err.toString()).contains("there is no folder Nope in");
+    assertThat(run("external", "--all", "ElvUI")).isEqualTo(1);
+    assertThat(err.toString()).contains("give the folders of one addon, or --all");
+
+    var before = Files.readString(config);
+    assertThat(run("external", "--all", "-n")).as(err.toString()).isEqualTo(0);
+    assertThat(out)
+        .hasToString(
+            """
+            [games.test.addons.dbm]
+            external = true
+            folders = ["DBM-Core", "DBM-StatusBarTimers"]
+
+            [games.test.addons.my-thing]
+            external = true
+            folders = ["MyThing"]
+            """);
+    assertThat(config).content().isEqualTo(before);
+    assertThat(run("external", "--all")).as(err.toString()).isEqualTo(0);
+    assertThat(config)
+        .content()
+        .contains("[games.test.addons.dbm]", "[games.test.addons.my-thing]");
+    assertThat(run("external", "--all")).isEqualTo(0);
+    assertThat(out.toString()).contains("is in wowfam.toml already");
+
+    assertThat(run("list")).isEqualTo(0);
+    assertThat(out.toString())
+        .containsPattern("elv-ui\\s+-\\s+present\\s+external \\(tukui\\)")
+        .containsPattern("dbm\\s+-\\s+present\\s+external\\n")
+        .doesNotContain("not in wowfam.toml");
+
+    // install and update don't touch them, and say when one is gone.
+    assertThat(run("update")).as(err.toString()).isEqualTo(0);
+    assertThat(err.toString()).isEmpty();
+    assertThat(addons.resolve("ElvUI/ElvUI.toc")).exists();
+    Files.delete(addons.resolve("MyThing/MyThing.toc"));
+    Files.delete(addons.resolve("MyThing"));
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+    assertThat(err.toString())
+        .contains("warning: my-thing is external, and MyThing is not in AddOns");
+    assertThat(run("list")).isEqualTo(0);
+    assertThat(out.toString()).containsPattern("my-thing\\s+-\\s+missing\\s+external");
+    assertThat(run("install", "elv-ui")).isEqualTo(1);
+    assertThat(err.toString())
+        .contains("elv-ui is external (tukui): wowfam does not install or update it");
+    assertThat(run("outdated")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString()).contains("all addons are up to date");
+
+    // remove takes the entry out and leaves the folders.
+    assertThat(run("remove", "elv-ui", "-n")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString())
+        .contains("would remove elv-ui from game test", "its folders would stay");
+    assertThat(run("remove", "elv-ui")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString())
+        .contains("removed elv-ui from game test", "its folders stay in AddOns");
+    assertThat(config).content().doesNotContain("elv-ui");
+    assertThat(addons.resolve("ElvUI_Options")).isDirectory();
+  }
+
+  @Test
+  void addTakesOverAnExternalAddonOnlyUnderItsName() throws Exception {
+    Files.createDirectories(addons.resolve("ElvUI"));
+    Files.createDirectories(addons.resolve("ElvUI_Old"));
+    assertThat(run("external", "ElvUI", "ElvUI_Old", "--by", "WowUp"))
+        .as(err.toString())
+        .isEqualTo(0);
+    var before = Files.readString(config);
+    github.release(
+        "someone/ElvUI",
+        "v13.0.1",
+        addonZip("ElvUI-13.0.1.zip", "13.0.1", Map.of("ElvUI", "", "ElvUI_Options", "ElvUI")));
+
+    assertThat(run("add", "someone/ElvUI", "--name", "elvui")).isEqualTo(1);
+    assertThat(err.toString())
+        .contains(
+            "wants to install folder ElvUI, which is in the external entry elv-ui",
+            "take elv-ui out of wowfam.toml or add this addon as elv-ui");
+    assertThat(config).content().isEqualTo(before);
+
+    assertThat(run("add", "someone/ElvUI")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString())
+        .contains(
+            ", in place of the external entry:",
+            "✓ elv-ui 13.0.1",
+            "ElvUI was already in AddOns; wowfam manages it now");
+    var after = new ConfigLoader(Map.of(), tmp).load(config).game("test");
+    assertThat(after.external()).isEmpty();
+    assertThat(after.addons())
+        .extractingByKey("elv-ui")
+        .extracting(AddonSpec::source)
+        .isEqualTo(Source.parse("github:someone/ElvUI"));
+    assertThat(config).content().doesNotContain("external");
+    assertThat(addons.resolve("ElvUI/ElvUI.toc")).content().contains("13.0.1");
+  }
+
+  @Test
+  void aManagedAddonMadeExternalKeepsItsFolders() throws Exception {
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+    var full = Files.readString(config);
+    Files.writeString(
+        config,
+        full.substring(0, full.indexOf("[games.test.addons.spoken-readables-audio]"))
+            + """
+            [games.test.addons.spoken-readables-audio]
+            external = true
+            folders = ["SpokenReadablesAudio"]
+            """);
+
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+
+    assertThat(out.toString())
+        .contains("handing spoken-readables-audio over: it is external now, so its folders stay");
+    assertThat(addons.resolve("SpokenReadablesAudio")).isDirectory();
+    assertThat(LockFile.read(tmp.resolve("wowfam.lock"), "test").entries())
+        .containsOnlyKeys("spoken");
   }
 
   @Test

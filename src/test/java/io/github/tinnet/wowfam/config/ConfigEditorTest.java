@@ -1,5 +1,6 @@
 package io.github.tinnet.wowfam.config;
 
+import static java.util.function.Predicate.not;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -11,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -63,6 +65,50 @@ final class ConfigEditorTest {
     assertThat(ConfigEditor.append(original + "\n\n", table))
         .isEqualTo("%s\n\n%s", original, table);
     assertThat(ConfigEditor.append("", table)).isEqualTo(table);
+  }
+
+  @Test
+  void writesExternalAddonsThatParseBack() {
+    var original = "[games.g]\naddons_dir = \"AddOns\"\n";
+    var byHand = new ExternalAddon("mine", Optional.empty(), List.of("MyStuff"));
+    var wowup =
+        new ExternalAddon("elv-ui", Optional.of("Wow\"Up"), List.of("ElvUI", "ElvUI_Options"));
+
+    assertThat(ConfigEditor.externalTable("g", wowup))
+        .isEqualTo(
+            """
+            [games.g.addons.elv-ui]
+            external = "Wow\\"Up"
+            folders = ["ElvUI", "ElvUI_Options"]
+            """);
+    var edited =
+        ConfigEditor.appendToGame(
+            ConfigEditor.appendToGame(original, "g", ConfigEditor.externalTable("g", byHand)),
+            "g",
+            ConfigEditor.externalTable("g", wowup));
+    assertThat(parse(edited).external())
+        .containsExactly(Map.entry("mine", byHand), Map.entry("elv-ui", wowup));
+  }
+
+  @HegelTest
+  void externalTablesRoundTrip(TestCase tc) {
+    var manager =
+        tc.draw(Generators.fromRegex("[A-Za-z0-9 \"'\\\\.-]{0,12}").fullmatch(true), "manager")
+            .strip();
+    var folders =
+        tc
+            .draw(
+                Generators.lists(Generators.fromRegex("[A-Za-z0-9_ .!-]{1,12}").fullmatch(true))
+                    .minSize(1)
+                    .maxSize(4),
+                "folders")
+            .stream()
+            .distinct()
+            .toList();
+    tc.assume(folders.stream().allMatch(ConfigLoader::isFolderName));
+    var addon = new ExternalAddon("a", Optional.of(manager).filter(not(String::isEmpty)), folders);
+    var toml = "[games.g]\naddons_dir = \"AddOns\"\n\n" + ConfigEditor.externalTable("g", addon);
+    assertThat(parse(toml).external()).containsExactly(Map.entry("a", addon));
   }
 
   @Test

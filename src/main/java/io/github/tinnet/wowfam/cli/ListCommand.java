@@ -2,6 +2,7 @@ package io.github.tinnet.wowfam.cli;
 
 import io.github.tinnet.wowfam.lock.LockEntry;
 import io.github.tinnet.wowfam.lock.LockFile;
+import java.nio.file.Files;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -22,7 +23,8 @@ final class ListCommand implements Callable<Integer> {
   @Override
   public Integer call() {
     var out = spec.commandLine().getOut();
-    var games = root.games(root.loadWorkspace());
+    var workspace = root.loadWorkspace();
+    var games = root.games(workspace);
     for (var config : games) {
       if (!config.name().equals(games.getFirst().name())) {
         out.println();
@@ -39,7 +41,29 @@ final class ListCommand implements Callable<Integer> {
         var installed = lock.get(addon.name()).map(LockEntry::version).orElse("-");
         table.row(addon.name(), addon.version(), installed, addon.source().toString());
       }
+      var addonsDir = config.settings().addonsDir();
+      for (var external : config.external().values()) {
+        var missing =
+            external.folders().stream()
+                .filter(f -> !Files.isDirectory(addonsDir.resolve(f)))
+                .toList();
+        var present =
+            missing.isEmpty()
+                ? "present"
+                : missing.size() == external.folders().size()
+                    ? "missing"
+                    : "missing " + String.join(", ", missing);
+        table.row(external.name(), "-", present, external.describe());
+      }
       table.print(out);
+      var unclaimed = AddOnsFolder.unclaimed(config, lock);
+      if (!unclaimed.isEmpty()) {
+        out.printf(
+            "not in wowfam.toml: %s%n(wowfam external --all%s records them as kept by something"
+                + " else)%n",
+            String.join(", ", unclaimed),
+            workspace.games().size() > 1 ? " -g " + config.name() : "");
+      }
     }
     return 0;
   }

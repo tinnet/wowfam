@@ -66,8 +66,17 @@ public final class Installer {
    *
    * @param missingDependencies addon folder -> required folders (from its .toc) not present in the
    *     AddOns directory
+   * @param missingExternal external addon -> its folders not present in the AddOns directory
    */
-  public record Report(List<Outcome> outcomes, Map<String, List<String>> missingDependencies) {}
+  public record Report(
+      List<Outcome> outcomes,
+      Map<String, List<String>> missingDependencies,
+      Map<String, List<String>> missingExternal) {
+
+    public Report(List<Outcome> outcomes, Map<String, List<String>> missingDependencies) {
+      this(outcomes, missingDependencies, Map.of());
+    }
+  }
 
   private final Backends backends;
   private final Progress progress;
@@ -116,6 +125,7 @@ public final class Installer {
           "cannot create " + settings.addonsDir() + ": " + e.getMessage(), e);
     }
     var order = config.installOrder(names);
+    var externals = config.externalDependencies(names);
     progress.start(order.size());
     for (var spec : order) {
       try {
@@ -133,9 +143,12 @@ public final class Installer {
       // of wowfam.toml by hand is uninstalled.
       for (var name : List.copyOf(lock.entries().keySet())) {
         if (!config.addons().containsKey(name)) {
-          progress.log("uninstalling " + name + ", which is no longer in game " + config.name());
+          progress.log(
+              config.external().containsKey(name)
+                  ? "handing " + name + " over: it is external now, so its folders stay"
+                  : "uninstalling " + name + ", which is no longer in game " + config.name());
           try {
-            var outcome = uninstall(settings.addonsDir(), lock, name);
+            var outcome = uninstall(settings.addonsDir(), lock, name, externalFolders(config));
             outcomes.add(outcome);
             progress.finished(outcome);
           } finally {
@@ -144,20 +157,38 @@ public final class Installer {
         }
       }
     }
-    return new Report(outcomes, missingDependencies(settings.addonsDir(), lock));
+    var missingExternal = new LinkedHashMap<String, List<String>>();
+    for (var external : externals) {
+      var absent =
+          external.folders().stream()
+              .filter(f -> !Files.isDirectory(settings.addonsDir().resolve(f)))
+              .toList();
+      if (!absent.isEmpty()) {
+        missingExternal.put(external.name(), absent);
+      }
+    }
+    return new Report(outcomes, missingDependencies(settings.addonsDir(), lock), missingExternal);
+  }
+
+  /** The folders the external entries of {@code config} list. */
+  public static Set<String> externalFolders(Config config) {
+    var folders = new LinkedHashSet<String>();
+    config.external().values().forEach(e -> folders.addAll(e.folders()));
+    return folders;
   }
 
   /**
    * Deletes the folders the lock records for {@code addon} and drops its entry; the caller writes
-   * the lock. A folder another entry also records stays: it belongs to that addon now.
+   * the lock. A folder another entry also records stays: it belongs to that addon now. So does one
+   * in {@code keep} (the folders of external entries).
    */
-  public static Outcome uninstall(Path addonsDir, LockFile lock, String addon) {
+  public static Outcome uninstall(Path addonsDir, LockFile lock, String addon, Set<String> keep) {
     var entry =
         lock.get(addon)
             .orElseThrow(() -> new IllegalArgumentException(addon + " is not in the lock"));
     var deleted = new ArrayList<String>();
     for (var folder : entry.folders()) {
-      if (lock.owners(folder).stream().anyMatch(o -> !o.equals(addon))) {
+      if (keep.contains(folder) || lock.owners(folder).stream().anyMatch(o -> !o.equals(addon))) {
         continue;
       }
       try {
@@ -256,7 +287,7 @@ public final class Installer {
             addonsDir,
             spec.name(),
             lock,
-            config.addons().keySet(),
+            config,
             lockedAny.map(LockEntry::folders).orElseGet(List::of),
             (staging, unpacked) -> {
               if (!hooks.preInstall().isEmpty()) {
@@ -371,15 +402,15 @@ public final class Installer {
    * cheap), calls {@code beforeSwap} with the staging folder and the addon folders in it, then
    * swaps the folders in and removes folders the previous release had but this one does not. If
    * {@code beforeSwap} throws, the AddOns directory is left as it was. A folder is refused if
-   * another addon of {@code configured} owns it; a lock entry of an addon no longer configured
-   * doesn't count.
+   * another addon of {@code config} owns it, or an external entry lists it; a lock entry of an
+   * addon no longer configured doesn't count.
    */
   private List<String> unpack(
       Path archive,
       Path addonsDir,
       String addon,
       LockFile lock,
-      Set<String> configured,
+      Config config,
       List<String> previousFolders,
       BiConsumer<Path, List<String>> beforeSwap) {
     var staging = addonsDir.resolve(".wowfam-staging-" + addon);
@@ -390,8 +421,22 @@ public final class Installer {
       for (var folder : folders) {
         var owner =
             lock.owners(folder).stream()
-                .filter(o -> !o.equals(addon) && configured.contains(o))
+                .filter(o -> !o.equals(addon) && config.addons().containsKey(o))
                 .findFirst();
+        var external = config.externalOwner(folder);
+        if (external.isPresent()) {
+          var name = external.orElseThrow().name();
+          throw new InstallException(
+              addon
+                  + " wants to install folder "
+                  + folder
+                  + ", which is in the external entry "
+                  + name
+                  + "; for wowfam to manage it, take "
+                  + name
+                  + " out of wowfam.toml or add this addon as "
+                  + name);
+        }
         if (owner.isPresent()) {
           throw new InstallException(
               addon

@@ -36,6 +36,7 @@ import picocli.CommandLine.ScopeType;
     subcommands = {
       AddCommand.class,
       CommandLine.HelpCommand.class,
+      ExternalCommand.class,
       InitCommand.class,
       InstallCommand.class,
       ListCommand.class,

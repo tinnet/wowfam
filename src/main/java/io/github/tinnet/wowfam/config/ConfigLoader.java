@@ -44,6 +44,7 @@ public final class ConfigLoader {
   private static final Set<String> SETTINGS_KEYS = Set.of("cache_dir", "default_game");
   private static final Set<String> GAME_KEYS = Set.of("dir", "addons_dir", "addons");
   private static final Set<String> COMMON_KEYS = Set.of("source", "version", "depends", "hooks");
+  private static final Set<String> EXTERNAL_KEYS = Set.of("external", "folders");
   private static final List<String> HOOK_KEYS = List.of("pre_install", "post_install");
   private static final TomlMapper TOML = TomlMapper.builder().build();
 
@@ -208,6 +209,7 @@ public final class ConfigLoader {
             Game.detect(addonsDir),
             override != null ? Optional.empty() : gameDir);
     var addons = new LinkedHashMap<String, AddonSpec>();
+    var external = new LinkedHashMap<String, ExternalAddon>();
     var addonsNode = node.path("addons");
     if (!addonsNode.isMissingNode() && !addonsNode.isObject()) {
       throw new ConfigException(where + ".addons must be a table in " + file);
@@ -223,13 +225,37 @@ public final class ConfigLoader {
                 + file
                 + ": addon names may only use letters, digits, - and _");
       }
-      addons.put(
-          entry.getKey(),
-          addon(where + ".addons", entry.getKey(), entry.getValue(), settings.game()));
+      if (entry.getValue().has("external")) {
+        external.put(
+            entry.getKey(),
+            external(where + ".addons." + entry.getKey(), entry.getKey(), entry.getValue()));
+      } else {
+        addons.put(
+            entry.getKey(),
+            addon(where + ".addons", entry.getKey(), entry.getValue(), settings.game()));
+      }
+    }
+    var claimed = new LinkedHashMap<String, String>();
+    for (var e : external.values()) {
+      for (var folder : e.folders()) {
+        var other = claimed.putIfAbsent(folder, e.name());
+        if (other != null) {
+          throw new ConfigException(
+              where
+                  + ".addons."
+                  + other
+                  + " and "
+                  + e.name()
+                  + " both list folder "
+                  + folder
+                  + " in "
+                  + file);
+        }
+      }
     }
     for (var spec : addons.values()) {
       for (var dep : spec.depends()) {
-        if (!addons.containsKey(dep)) {
+        if (!addons.containsKey(dep) && !external.containsKey(dep)) {
           throw new ConfigException(
               where
                   + ".addons."
@@ -243,7 +269,57 @@ public final class ConfigLoader {
         }
       }
     }
-    return new Config(file, name, settings, hooks, addons);
+    return new Config(file, name, settings, hooks, addons, external);
+  }
+
+  /** An entry with {@code external = "<manager>"} (or {@code true}) and its {@code folders}. */
+  private static ExternalAddon external(String where, String name, JsonNode node) {
+    for (var key : node.propertyNames()) {
+      if (!EXTERNAL_KEYS.contains(key)) {
+        throw new ConfigException(
+            where
+                + " is external, so it takes only external and folders, not "
+                + key
+                + " (wowfam doesn't install it)");
+      }
+    }
+    var value = node.path("external");
+    Optional<String> manager;
+    if (value.isBoolean() && value.asBoolean()) {
+      manager = Optional.empty();
+    } else if (value.isString() && !value.asString().isBlank()) {
+      manager = Optional.of(value.asString().strip());
+    } else {
+      throw new ConfigException(
+          where + ".external must be true or who manages the addon, e.g. external = \"WowUp\"");
+    }
+    var foldersNode = node.path("folders");
+    var folders = new ArrayList<String>();
+    if (foldersNode.isArray()) {
+      for (var f : foldersNode) {
+        if (!f.isString() || !isFolderName(f.asString())) {
+          throw new ConfigException(
+              where + ".folders must list folder names in AddOns, such as \"ElvUI\"");
+        }
+        if (!folders.contains(f.asString())) {
+          folders.add(f.asString());
+        }
+      }
+    }
+    if (folders.isEmpty()) {
+      throw new ConfigException(
+          where
+              + " needs folders: the folders in AddOns it stands for, e.g. folders = [\"ElvUI\"]");
+    }
+    return new ExternalAddon(name, manager, folders);
+  }
+
+  /** A folder directly in AddOns: no separators, nothing that leaves the folder. */
+  public static boolean isFolderName(String name) {
+    return !name.isBlank()
+        && !name.equals(".")
+        && !name.equals("..")
+        && name.chars().noneMatch(c -> c == '/' || c == '\\' || c == ':' || c < 0x20);
   }
 
   private static JsonNode tree(Path file, String toml) {
@@ -292,7 +368,10 @@ public final class ConfigLoader {
     }
     var sourceNode = node.path("source");
     if (!sourceNode.isString()) {
-      throw new ConfigException(where + " needs a source, e.g. source = \"github:owner/repo\"");
+      throw new ConfigException(
+          where
+              + " needs a source, e.g. source = \"github:owner/repo\" (or external = true, for an"
+              + " addon wowfam leaves to another manager)");
     }
     var source = Source.parse(sourceNode.asString());
     var version =

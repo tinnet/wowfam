@@ -7,7 +7,7 @@ How wowfam works inside. The [README](../README.md) describes what it does for u
 
 | Package       | What                                                                                  |
 |---------------|---------------------------------------------------------------------------------------|
-| `cli`         | picocli commands (`init`, `add`, `remove`, `install`, `update`, `list`, `outdated`, `registry`), output tables, live progress |
+| `cli`         | picocli commands (`init`, `add`, `remove`, `external`, `install`, `update`, `list`, `outdated`, `registry`), output tables, live progress |
 | `config`      | `wowfam.toml` model, loader and text editor; finding WoW installs; game detection; well-known addons |
 | `backend`     | the `Backend` interface, release selection, HTTP; `backend.github` is GitHub releases |
 | `install`     | download → verify → unpack → swap folders; zip-slip-safe extraction; `.toc` parsing; hooks |
@@ -55,15 +55,17 @@ For each addon, in dependency order (`depends`):
    verify it.
 3. Extract it into a staging folder inside AddOns (same file system, so moves are cheap). The
    extractor refuses entry names that would escape the folder.
-4. Refuse folders another addon's lock entry owns. An entry whose addon is no longer in
-   `wowfam.toml` doesn't count, so a renamed entry takes its folders over.
+4. Refuse folders another addon's lock entry owns, or an external entry lists. A lock entry whose
+   addon is no longer in `wowfam.toml` doesn't count, so a renamed entry takes its folders over.
 5. Run `pre_install` hooks on the staging folder; a failure stops here.
 6. Delete folders the previous release had and this one doesn't (also when it came from another
    source); move the new folders into place.
 7. Record the release, asset, checksum and folders in `wowfam.lock`, then run `post_install`.
 
 A run without addon names then uninstalls lock entries whose addon is no longer in `wowfam.toml`:
-their folders are deleted, except ones another entry has taken over, and the entry is dropped.
+their folders are deleted, except ones another entry has taken over or an external entry lists,
+and the entry is dropped. That last exception is how an addon is handed to another manager: its
+table becomes an external one, and the next full run drops the lock entry and keeps the folders.
 `wowfam remove` does the same for the addons it is given, and takes their tables out of
 `wowfam.toml` as text (the table, its sub-tables and the comment paragraph right above). It parses
 the result and only writes it if every other addon, the settings and the hooks come out unchanged.
@@ -142,6 +144,21 @@ Each game's addons are their own tables rather than one list of addons with a `g
 entry: a game's section then reads as its AddOns folder, per-game differences (a version pinned for
 one game) need no overrides, and `add`, `remove` and the lock all work on one game's tables. The
 price is listing an addon twice for two games.
+
+### External addons
+
+A table with `external` instead of a `source` is an `ExternalAddon`, kept in `Config.external`
+apart from the `AddonSpec`s: it has no backend, version or hooks, never reaches the lock, and every
+path that installs, updates or checks for updates goes through `Config.addons` and so never sees
+one. The two maps share the table names, which keeps them distinct. `installOrder` resolves
+`depends` over both and returns only managed addons; `externalDependencies` returns the external
+ones a run needs, whose folders the installer checks are present. Naming an external addon to
+`install` or `update` is an error rather than a silent no-op.
+
+`list` and `external --all` compare AddOns with the lock and the external entries
+(`cli.AddOnsFolder`). `--all` groups folders by name (`ExternalCommand.groups`) only to save typing;
+the result is plain tables the user can edit. `add` under an external entry's name removes that
+table as text before appending its own, so the takeover is one edit that a failed install undoes.
 
 `wowfam.lock` keeps the same split (`[games.<name>.addons.<addon>]`). A `LockFile` is one game's
 part; writing it rewrites the file with the other games' entries as they were read.

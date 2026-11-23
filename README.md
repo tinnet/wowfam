@@ -84,7 +84,8 @@ wowfam install questie    # one addon, plus whatever it `depends` on
 wowfam outdated           # what update would change
 wowfam update             # move everything to the newest matching release
 wowfam remove questie     # uninstall it and take it out of wowfam.toml
-wowfam list               # what is configured and what is installed
+wowfam external ElvUI     # record an addon something else keeps in AddOns
+wowfam list               # what is configured, what is installed, and what wowfam doesn't know
 wowfam registry           # the well-known addons add takes by name
 ```
 
@@ -125,9 +126,48 @@ and manages it from then on. If installing fails, the entry is taken out of `wow
 of `wowfam.toml`, keeping the rest of the file as it is. `-n` shows what it would do. It refuses
 while another entry `depends` on the addon.
 
+`remove` on an [external addon](#wowfam-external) only takes its table out; its folders stay.
+
 Editing `wowfam.toml` by hand works too: `wowfam install` and `wowfam update` without addon names
 uninstall whatever is in a game's part of `wowfam.lock` but no longer in its part of `wowfam.toml`. A renamed entry takes its
 folders over, and an entry moved to another source (a fork) drops folders only the old one had.
+
+### `wowfam external`
+
+wowfam leaves folders it didn't install alone, and `wowfam list` names them at the end
+(`not in wowfam.toml: …`) so a forgotten addon doesn't go unnoticed. For the ones another manager
+(or you, by hand) keeps, record that:
+
+```console
+$ wowfam external ElvUI ElvUI_Options --by WowUp
+added to /home/me/.config/wowfam/wowfam.toml:
+[games.forever.addons.elv-ui]
+external = "WowUp"
+folders = ["ElvUI", "ElvUI_Options"]
+
+$ wowfam external --all          # every folder wowfam.toml doesn't account for
+```
+
+`--all` makes one entry per addon: a folder goes with the folder its name starts with
+(`ElvUI_Options` with `ElvUI`), else with those sharing the part before the first `-` or `_`
+(`DBM-Core`, `DBM-StatusBarTimers`). The entries are an editable guess; `-n` prints them first.
+The entry's name is the first folder in kebab-case unless `--name` gives one.
+
+wowfam never installs, updates or deletes an external addon's folders. Having it in `wowfam.toml`
+means:
+
+- `list` shows it (`present` or `missing`, and who keeps it) instead of naming its folders as
+  unknown;
+- `install` warns when its folders aren't in AddOns, say on a second machine with the same
+  `wowfam.toml`;
+- another addon can `depends` on it;
+- installing an addon that would overwrite its folders fails, unless the new addon has the
+  external entry's name: `wowfam add tukui-org/ElvUI --name elv-ui` replaces the entry and has
+  wowfam manage ElvUI from then on;
+- `wowfam remove` takes the entry out and leaves the folders.
+
+To hand an addon wowfam installed to another manager, replace its `source` and options with
+`external` and `folders`; the next `install` drops it from `wowfam.lock` and keeps its folders.
 
 ## wowfam.toml
 
@@ -156,6 +196,10 @@ asset = "Spoken-*.zip"            # which zip of a release (default "*.zip")
 source = "github:rusty-key/spoken-wow"
 tag_prefix = "bosses-audio/"
 depends = ["spoken"]              # installed first, and pulled in by `install spoken-bosses-audio`
+
+[games.forever.addons.elv-ui]     # kept by something else; see wowfam external
+external = "WowUp"                # who keeps it, or true
+folders = ["ElvUI", "ElvUI_Options"]
 
 [games.retail]
 dir = "~/Games/World of Warcraft/_retail_"
@@ -316,10 +360,12 @@ wowfam backend would start with WoWInterface's permission, and with authenticati
 **My addon isn't on GitHub. What now?**
 Ask its author: if they use the BigWigs packager, a GitHub release is one setting away. Until then,
 keep it in AddOns by hand or with another manager; wowfam leaves folders it didn't install alone.
+`wowfam external` records it in `wowfam.toml`, so `list` stops naming it as unknown.
 
 **Can I use wowfam next to WowUp or the CurseForge app?**
 Yes, as long as each addon has one manager. wowfam only touches the folders it installed, and
-taking over an addon that's already there is `wowfam add`.
+taking over an addon that's already there is `wowfam add`. `wowfam external --all --by WowUp`
+records the rest, so wowfam won't install over them by accident.
 
 **Does wowfam show ads or pay authors?**
 No to both. Authors aren't paid for GitHub downloads; if an addon you use has a Patreon or similar,

@@ -52,6 +52,35 @@ public final class ConfigEditor {
     return table.toString();
   }
 
+  /** The {@code [games.<game>.addons.<name>]} table for an external addon, ending in a newline. */
+  public static String externalTable(String game, ExternalAddon addon) {
+    if (!NAME.matcher(addon.name()).matches()) {
+      throw new ConfigException(
+          "'" + addon.name() + "' cannot be an addon name: use letters, digits, - and _");
+    }
+    var table =
+        new StringBuilder("[games.")
+            .append(game)
+            .append(".addons.")
+            .append(addon.name())
+            .append("]\n");
+    if (addon.manager().isPresent()) {
+      table.append("external = ");
+      quoted(table, addon.manager().orElseThrow());
+      table.append('\n');
+    } else {
+      table.append("external = true\n");
+    }
+    table.append("folders = [");
+    for (int i = 0; i < addon.folders().size(); i++) {
+      if (i > 0) {
+        table.append(", ");
+      }
+      quoted(table, addon.folders().get(i));
+    }
+    return table.append("]\n").toString();
+  }
+
   /** The {@code [games.<name>]} table for a game in {@code dir}, ending in a newline. */
   public static String gameTable(String name, String dir) {
     if (!NAME.matcher(name).matches()) {

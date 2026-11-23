@@ -51,7 +51,7 @@ final class RemoveCommand implements Callable<Integer> {
     var lock = LockFile.read(config.lockFile(), config.name());
     var names = new LinkedHashSet<>(addons);
     for (var name : names) {
-      if (!config.addons().containsKey(name) && lock.get(name).isEmpty()) {
+      if (!config.has(name) && lock.get(name).isEmpty()) {
         throw new ConfigException(
             "no addon named '"
                 + name
@@ -94,6 +94,11 @@ final class RemoveCommand implements Callable<Integer> {
         if (config.addons().containsKey(name)) {
           out.printf("would remove %s from game %s in %s%n", name, config.name(), config.file());
         }
+        if (config.external().containsKey(name)) {
+          out.printf(
+              "would remove %s from game %s in %s; its folders would stay%n",
+              name, config.name(), config.file());
+        }
       }
       return 0;
     }
@@ -104,11 +109,13 @@ final class RemoveCommand implements Callable<Integer> {
     for (var name : names) {
       if (lock.get(name).isPresent()) {
         try {
-          outcomes.add(Installer.uninstall(config.settings().addonsDir(), lock, name));
+          outcomes.add(
+              Installer.uninstall(
+                  config.settings().addonsDir(), lock, name, Installer.externalFolders(config)));
         } finally {
           lock.write();
         }
-      } else {
+      } else if (!config.external().containsKey(name)) {
         out.printf("%s was not installed%n", name);
       }
     }
@@ -117,9 +124,14 @@ final class RemoveCommand implements Callable<Integer> {
     }
     Reports.print(spec, new Installer.Report(outcomes, Map.of()));
     names.stream()
-        .filter(config.addons()::containsKey)
+        .filter(config::has)
         .forEach(name ->
-            out.printf("removed %s from game %s in %s%n", name, config.name(), config.file()));
+            out.printf(
+                "removed %s from game %s in %s%s%n",
+                name,
+                config.name(),
+                config.file(),
+                config.external().containsKey(name) ? "; its folders stay in AddOns" : ""));
     return 0;
   }
 
@@ -131,7 +143,7 @@ final class RemoveCommand implements Callable<Integer> {
     var original = read(config);
     var text = original;
     for (var name : names) {
-      if (!config.addons().containsKey(name)) {
+      if (!config.has(name)) {
         continue;
       }
       text =
@@ -151,9 +163,12 @@ final class RemoveCommand implements Callable<Integer> {
     var expected = new LinkedHashMap<>(before.games());
     var game = before.game(config.name());
     var addons = new LinkedHashMap<>(game.addons());
+    var external = new LinkedHashMap<>(game.external());
     names.forEach(addons::remove);
+    names.forEach(external::remove);
     expected.put(
-        game.name(), new Config(game.file(), game.name(), game.settings(), game.hooks(), addons));
+        game.name(),
+        new Config(game.file(), game.name(), game.settings(), game.hooks(), addons, external));
     if (!after.equals(new Workspace(before.file(), before.defaultGame(), expected))) {
       throw new ConfigException(
           "cannot remove "

@@ -5,6 +5,7 @@ import io.github.tinnet.wowfam.install.Installer;
 import io.github.tinnet.wowfam.install.Progress;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 import picocli.CommandLine.Model.CommandSpec;
 
 final class Reports {
@@ -25,6 +26,15 @@ final class Reports {
     var workspace = root.loadWorkspace();
     var games = root.games(workspace);
     for (var name : names) {
+      var external =
+          games.stream().flatMap(g -> Stream.ofNullable(g.external().get(name))).findFirst();
+      if (external.isPresent() && games.stream().noneMatch(g -> g.addons().containsKey(name))) {
+        throw new ConfigException(
+            name
+                + " is "
+                + external.orElseThrow().describe()
+                + ": wowfam does not install or update it");
+      }
       if (games.stream().noneMatch(g -> g.addons().containsKey(name))) {
         throw new ConfigException(
             "no addon named '"
@@ -82,6 +92,15 @@ final class Reports {
             err.printf(
                 "warning: %s requires %s, which is not installed%n",
                 folder, String.join(", ", deps)));
+    report
+        .missingExternal()
+        .forEach((addon, folders) ->
+            err.printf(
+                "warning: %s is external, and %s not in AddOns%n",
+                addon,
+                folders.size() == 1
+                    ? folders.getFirst() + " is"
+                    : String.join(", ", folders) + " are"));
     return 0;
   }
 

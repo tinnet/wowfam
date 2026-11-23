@@ -1,11 +1,8 @@
 package io.github.tinnet.wowfam.cli;
 
-import static java.util.stream.Collectors.toUnmodifiableSet;
-
 import io.github.tinnet.wowfam.backend.BackendException;
 import io.github.tinnet.wowfam.backend.ReleaseSelector;
 import io.github.tinnet.wowfam.config.AddonSpec;
-import io.github.tinnet.wowfam.config.Config;
 import io.github.tinnet.wowfam.config.ConfigEditor;
 import io.github.tinnet.wowfam.config.ConfigException;
 import io.github.tinnet.wowfam.config.Registry;
@@ -23,7 +20,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Callable;
-import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -128,6 +124,8 @@ final class AddCommand implements Callable<Integer> {
       throw new ConfigException(
           "'" + addonName + "' cannot be an addon name: use letters, digits, - and _");
     }
+    // An external entry of the same name is the addon wowfam is to take over from another manager.
+    var replacing = Optional.ofNullable(config.external().get(addonName));
     var taken = config.addons().get(addonName);
     if (taken != null) {
       throw new ConfigException(
@@ -194,6 +192,7 @@ final class AddCommand implements Callable<Integer> {
             new AddonSpec(addon.name(), addon.source(), addon.version(), List.of(), written));
     var out = spec.commandLine().getOut();
     if (dryRun) {
+      replacing.ifPresent(e -> out.printf("(would replace the external entry %s)%n", e.name()));
       out.print(table);
       out.printf(
           "(dry run: would install %s from %s%s)%n",
@@ -201,7 +200,20 @@ final class AddCommand implements Callable<Integer> {
       return 0;
     }
     var original = read(config.file());
-    var edited = ConfigEditor.appendToGame(original, config.name(), table);
+    var base =
+        replacing.isEmpty()
+            ? original
+            : ConfigEditor.removeAddon(original, config.name(), addonName)
+                .orElseThrow(() ->
+                    new ConfigException(
+                        "cannot find the [games."
+                            + config.name()
+                            + ".addons."
+                            + addonName
+                            + "] table in "
+                            + config.file()
+                            + "; take the external entry out by hand"));
+    var edited = ConfigEditor.appendToGame(base, config.name(), table);
     // Adding a table is only wrong when the file keeps its addons in a form a new table cannot
     // join (an inline table); parse first so that never reaches the disk.
     if (!root.loader()
@@ -213,13 +225,17 @@ final class AddCommand implements Callable<Integer> {
           "cannot add " + addonName + " to game " + config.name() + " in " + config.file());
     }
     ConfigEditor.write(config.file(), edited);
-    out.printf("added to %s:%n%s", config.file(), table);
+    out.printf(
+        "added to %s%s:%n%s",
+        config.file(), replacing.map(e -> ", in place of the external entry").orElse(""), table);
     if (noInstall) {
       return 0;
     }
 
     var updated = root.loadWorkspace().game(config.name());
-    var unmanaged = unmanagedFolders(updated);
+    var unmanaged =
+        Set.copyOf(
+            AddOnsFolder.unmanaged(updated, LockFile.read(updated.lockFile(), updated.name())));
     var lockedBefore = LockFile.read(updated.lockFile(), updated.name()).get(addonName);
     Installer.Report report;
     var live = Reports.live(root, spec);
@@ -253,9 +269,14 @@ final class AddCommand implements Callable<Integer> {
    * The repository name in kebab-case: {@code BetterVendorPrice} -> {@code better-vendor-price}.
    */
   static String defaultName(Source source) {
-    return source
-        .shortName()
-        .replaceAll("([a-z0-9])([A-Z])", "$1-$2")
+    return kebabCase(source.shortName());
+  }
+
+  /**
+   * {@code BetterVendorPrice} -> {@code better-vendor-price}, {@code DBM-Core} -> {@code dbm-core}.
+   */
+  static String kebabCase(String name) {
+    return name.replaceAll("([a-z0-9])([A-Z])", "$1-$2")
         .replaceAll("([A-Z]+)([A-Z][a-z])", "$1-$2")
         .replaceAll("[^A-Za-z0-9]+", "-")
         .replaceAll("^-+|-+$", "")
@@ -265,24 +286,6 @@ final class AddCommand implements Callable<Integer> {
   private static void putIfSet(Map<String, String> options, String key, @Nullable String value) {
     if (value != null && !value.isBlank()) {
       options.put(key, value);
-    }
-  }
-
-  /** Folders in AddOns that no entry of the lock owns. */
-  private static Set<String> unmanagedFolders(Config config) {
-    var lock = LockFile.read(config.lockFile(), config.name());
-    var dir = config.settings().addonsDir();
-    if (!Files.isDirectory(dir)) {
-      return Set.of();
-    }
-    try (Stream<Path> entries = Files.list(dir)) {
-      return entries
-          .filter(Files::isDirectory)
-          .map(p -> p.getFileName().toString())
-          .filter(f -> lock.owners(f).isEmpty())
-          .collect(toUnmodifiableSet());
-    } catch (IOException e) {
-      throw new ConfigException("cannot list " + dir + ": " + e.getMessage(), e);
     }
   }
 
