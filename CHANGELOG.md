@@ -2,6 +2,21 @@
 
 What changed in each wowfam release. Versions are dates (CalVer).
 
+## 2026.11.23
+
+### Features
+
+- **cli**: Record addons another manager keeps with wowfam external ([0359da0](https://github.com/tinnet/wowfam/commit/0359da0ea5133b4c056e8464e6084164b501cadc))
+
+### Fixes
+
+- Keep wowfam.lock and wowfam.toml readable when a value holds a byte order mark ([e45b7f3](https://github.com/tinnet/wowfam/commit/e45b7f358400b2839d642952a73e96e67a6b8966))
+- **cli**: Never delete a folder an external entry stands for ([ede3b39](https://github.com/tinnet/wowfam/commit/ede3b39ffe143e8e205443099b9e30c44f7ad9aa))
+
+### Documentation
+
+- Add instawow and how it handles CurseForge and Wago keys ([f0b8abf](https://github.com/tinnet/wowfam/commit/f0b8abf99fc0ff17494694566589dc2da363d7f9))
+
 ## 2026.11.18
 
 ### Features
