@@ -168,6 +168,11 @@ means:
   wowfam manage ElvUI from then on;
 - `wowfam remove` takes the entry out and leaves the folders.
 
+A folder that is a link (an addon you develop, linked into AddOns from its working copy) needs no
+entry: it is plainly yours. `list` names links on a line of their own, `external --all` skips
+them, and wowfam never replaces or deletes one. An addon whose release would install over a link
+fails until you remove the link; uninstalling it drops its lock entry and leaves the link.
+
 To hand an addon wowfam installed to another manager, replace its `source` and options with
 `external` and `folders`; the next `install` drops it from `wowfam.lock` and keeps its folders.
 

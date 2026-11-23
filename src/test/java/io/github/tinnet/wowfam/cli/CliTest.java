@@ -2,6 +2,7 @@ package io.github.tinnet.wowfam.cli;
 
 import static io.github.tinnet.wowfam.FakeGitHub.addonZip;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Comparator.reverseOrder;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.tinnet.wowfam.FakeGitHub;
@@ -989,6 +990,48 @@ final class CliTest {
     assertThat(run("external", "--all", "-n")).as(err.toString()).isEqualTo(0);
 
     assertThat(out.toString()).startsWith("[games.test.addons.spoken-extra]\n");
+  }
+
+  @DisabledOnOs(OS.WINDOWS) // symbolic links need a privilege there
+  @Test
+  void linkedFoldersAreTheUsersOwnAndLeftAlone() throws Exception {
+    assertThat(run("install")).as(err.toString()).isEqualTo(0);
+    var dev = Files.createDirectories(tmp.resolve("src/MyAddon"));
+    Files.writeString(dev.resolve("MyAddon.toc"), "## Title: mine\n");
+    Files.createSymbolicLink(addons.resolve("MyAddon"), dev);
+    Files.createDirectories(addons.resolve("ByHand"));
+    // Alone, it is named after itself, not after the managed Spoken it shares a stem with.
+    Files.createDirectories(addons.resolve("Spoken_Extra"));
+
+    assertThat(run("list")).isEqualTo(0);
+    assertThat(out.toString())
+        .contains(
+            "linked into AddOns, left alone: MyAddon",
+            "not in wowfam.toml: ByHand, Spoken_Extra\n");
+    assertThat(run("external", "--all", "-n")).as(err.toString()).isEqualTo(0);
+    assertThat(out.toString())
+        .contains("folders = [\"ByHand\"]", "[games.test.addons.spoken-extra]")
+        .doesNotContain("MyAddon");
+
+    // A working copy linked in where a release goes is neither replaced nor deleted.
+    var spokenDev = Files.createDirectories(tmp.resolve("src/SpokenReadablesAudio"));
+    Files.writeString(spokenDev.resolve("dev.lua"), "-- mine\n");
+    try (var tree = Files.walk(addons.resolve("SpokenReadablesAudio"))) {
+      for (var path : tree.sorted(reverseOrder()).toList()) {
+        Files.delete(path);
+      }
+    }
+    Files.createSymbolicLink(addons.resolve("SpokenReadablesAudio"), spokenDev);
+
+    assertThat(run("install", "--force", "spoken-readables-audio")).isEqualTo(1);
+    assertThat(err.toString())
+        .contains(
+            "wants to install folder SpokenReadablesAudio, which is a link to "
+                + spokenDev
+                + "; wowfam doesn't replace links");
+    assertThat(run("remove", "spoken-readables-audio")).as(err.toString()).isEqualTo(0);
+    assertThat(addons.resolve("SpokenReadablesAudio")).isSymbolicLink();
+    assertThat(spokenDev.resolve("dev.lua")).exists();
   }
 
   @Test

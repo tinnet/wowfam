@@ -192,7 +192,11 @@ public final class Installer {
             .orElseThrow(() -> new IllegalArgumentException(addon + " is not in the lock"));
     var deleted = new ArrayList<String>();
     for (var folder : entry.folders()) {
-      if (keep.contains(folder) || lock.owners(folder).stream().anyMatch(o -> !o.equals(addon))) {
+      // A link is the user's (an addon being developed, linked in where the release was): only
+      // the lock entry goes.
+      if (keep.contains(folder)
+          || Files.isSymbolicLink(addonsDir.resolve(folder))
+          || lock.owners(folder).stream().anyMatch(o -> !o.equals(addon))) {
         continue;
       }
       try {
@@ -427,6 +431,16 @@ public final class Installer {
             lock.owners(folder).stream()
                 .filter(o -> !o.equals(addon) && config.addons().containsKey(o))
                 .findFirst();
+        var target = addonsDir.resolve(folder);
+        if (Files.isSymbolicLink(target)) {
+          throw new InstallException(
+              addon
+                  + " wants to install folder "
+                  + folder
+                  + ", which is a link to "
+                  + Files.readSymbolicLink(target)
+                  + "; wowfam doesn't replace links (remove it to install the release)");
+        }
         var external = config.externalOwner(folder);
         if (external.isPresent()) {
           var name = external.orElseThrow().name();
@@ -455,7 +469,8 @@ public final class Installer {
       stale.removeAll(folders);
       for (var folder : stale) {
         // A folder an external entry lists is someone else's now, even if this addon had it.
-        if (config.externalOwner(folder).isEmpty()) {
+        if (config.externalOwner(folder).isEmpty()
+            && !Files.isSymbolicLink(addonsDir.resolve(folder))) {
           deleteRecursively(addonsDir.resolve(folder));
         }
       }

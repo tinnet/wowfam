@@ -59,12 +59,21 @@ final class ListCommand implements Callable<Integer> {
       }
       table.print(out);
       List<String> unclaimed;
+      List<String> linked;
       try {
         unclaimed = AddOnsFolder.unclaimed(config, lock);
+        linked =
+            AddOnsFolder.links(config.settings().addonsDir()).keySet().stream()
+                .filter(f -> config.externalOwner(f).isEmpty())
+                .toList();
       } catch (ConfigException e) {
-        // Only a hint: the table above is what list is for.
+        // Only hints: the table above is what list is for.
         spec.commandLine().getErr().println("warning: " + e.getMessage());
         unclaimed = List.of();
+        linked = List.of();
+      }
+      if (!linked.isEmpty()) {
+        out.printf("linked into AddOns, left alone: %s%n", String.join(", ", linked));
       }
       if (!unclaimed.isEmpty()) {
         out.printf(

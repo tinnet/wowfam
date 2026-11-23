@@ -155,6 +155,9 @@ one. The two maps share the table names, which keeps them distinct. `installOrde
 ones a run needs, whose folders the installer checks are present. Naming an external addon to
 `install` or `update` is an error rather than a silent no-op.
 
+Links in AddOns (`Files.isSymbolicLink`) get the same protection without an entry: `unpack`
+refuses to install over one, and neither stale-folder cleanup nor `uninstall` deletes one.
+
 `list` and `external --all` compare AddOns with the lock and the external entries
 (`cli.AddOnsFolder`). `--all` groups folders by name (`ExternalCommand.groups`) only to save typing;
 the result is plain tables the user can edit. `add` under an external entry's name removes that
